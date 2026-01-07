@@ -9,102 +9,114 @@ namespace FlintsLabs.D365.ODataClient.Extensions;
 /// </summary>
 public static class ServiceCollectionExtensions
 {
-    /// <summary>
-    /// Add D365 OData client services to the dependency injection container
-    /// </summary>
-    /// <param name="services">The service collection</param>
-    /// <param name="configure">Configuration action for D365 client options</param>
-    /// <returns>The service collection for chaining</returns>
-    public static IServiceCollection AddD365ODataClient(
-        this IServiceCollection services,
-        Action<D365ClientOptions> configure)
-    {
-        // Configure options
-        services.Configure(configure);
-        
-        // Get options for HttpClient setup
-        var options = new D365ClientOptions();
-        configure(options);
-        
-        // Register HTTP client factory with named client
-        services.AddHttpClient("D365Endpoint", (serviceProvider, client) =>
-        {
-            client.BaseAddress = new Uri(options.GetBaseUrl());
-        }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
-        {
-            // Support self-signed certificates for on-premise D365
-            ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true
-        });
-        
-        // Register unified token provider (handles both Azure AD and ADFS)
-        services.AddSingleton<ID365AccessTokenProvider, D365AccessTokenProvider>();
-        
-        // Register D365 service as scoped (one instance per request)
-        services.AddScoped<ID365Service, D365Service>();
-        
-        return services;
-    }
+    // Store registrations for factory
+    private static readonly Dictionary<string, D365ClientOptions> _registrations = new();
     
     /// <summary>
-    /// Add D365 OData client services with configuration from IConfiguration section
-    /// Auto-detects Azure AD or ADFS based on TenantId/TokenEndpoint
+    /// Add named D365 OData client service with fluent configuration
+    /// Supports multiple D365 sources (Cloud, OnPrem, etc.)
     /// </summary>
     /// <param name="services">The service collection</param>
-    /// <param name="configuration">The configuration</param>
-    /// <param name="sectionName">Configuration section name (default: "D365")</param>
-    /// <returns>The service collection for chaining</returns>
+    /// <param name="name">Unique name for this D365 instance</param>
+    /// <param name="configure">Fluent configuration builder</param>
+    /// <example>
+    /// <code>
+    /// builder.Services.AddD365ODataClient("Cloud", d365 => 
+    /// {
+    ///     d365.UseAzureAD()
+    ///         .WithClientId("client-id")
+    ///         .WithClientSecret("secret")
+    ///         .WithTenantId("tenant-id")
+    ///         .WithResource("https://cloud.operations.dynamics.com");
+    /// });
+    /// 
+    /// builder.Services.AddD365ODataClient("OnPrem", d365 => 
+    /// {
+    ///     d365.UseADFS()
+    ///         .WithTokenEndpoint("https://fs.company.com/adfs/oauth2/token")
+    ///         .WithClientId("client-id")
+    ///         .WithClientSecret("secret")
+    ///         .WithResource("https://ax.company.com")
+    ///         .WithOrganizationUrl("https://ax.company.com/namespaces/AXSF/");
+    /// });
+    /// </code>
+    /// </example>
     public static IServiceCollection AddD365ODataClient(
         this IServiceCollection services,
-        IConfiguration configuration,
-        string sectionName = "D365")
+        string name,
+        Action<D365ClientBuilder> configure)
     {
-        var section = configuration.GetSection(sectionName);
+        var builder = new D365ClientBuilder();
+        configure(builder);
         
-        // Configure options with auto-detection
-        services.Configure<D365ClientOptions>(opts =>
+        // Store registration
+        _registrations[name] = builder.Options;
+        
+        // Register HttpClient for this instance
+        services.AddHttpClient($"D365Endpoint_{name}", client =>
         {
-            opts.ClientId = section["ClientId"];
-            opts.ClientSecret = section["ClientSecret"];
-            opts.TenantId = section["TenantId"];
-            opts.Resource = section["Resource"];
-            opts.OrganizationUrl = section["OrganizationUrl"];
-            opts.TokenEndpoint = section["TokenEndpoint"];
-            opts.GrantType = section["GrantType"] ?? "client_credentials";
-            
-            // Auto-detect ADFS if TenantId is "adfs" or TokenEndpoint is set
-            if (string.Equals(opts.TenantId, "adfs", StringComparison.OrdinalIgnoreCase) 
-                || !string.IsNullOrWhiteSpace(opts.TokenEndpoint))
-            {
-                opts.AuthType = D365AuthType.ADFS;
-            }
-        });
-        
-        // Get values for HttpClient setup
-        var baseUrl = !string.IsNullOrWhiteSpace(section["OrganizationUrl"])
-            ? section["OrganizationUrl"]!.TrimEnd('/') + "/data/"
-            : !string.IsNullOrWhiteSpace(section["Resource"])
-                ? section["Resource"]!.TrimEnd('/') + "/data/"
-                : string.Empty;
-        
-        // Register HTTP client factory with named client
-        services.AddHttpClient("D365Endpoint", (serviceProvider, client) =>
-        {
+            var baseUrl = builder.Options.GetBaseUrl();
             if (!string.IsNullOrWhiteSpace(baseUrl))
             {
                 client.BaseAddress = new Uri(baseUrl);
             }
         }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
         {
-            // Support self-signed certificates for on-premise D365
             ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true
         });
         
-        // Register unified token provider (handles both Azure AD and ADFS)
-        services.AddSingleton<ID365AccessTokenProvider, D365AccessTokenProvider>();
-        
-        // Register D365 service as scoped (one instance per request)
-        services.AddScoped<ID365Service, D365Service>();
+        // Register factory (singleton, handles all named services)
+        services.AddSingleton<ID365ServiceFactory>(sp => 
+            new D365ServiceFactory(sp, new Dictionary<string, D365ClientOptions>(_registrations)));
         
         return services;
+    }
+    
+    /// <summary>
+    /// Add default D365 OData client service with fluent configuration
+    /// </summary>
+    public static IServiceCollection AddD365ODataClient(
+        this IServiceCollection services,
+        Action<D365ClientBuilder> configure)
+    {
+        return services.AddD365ODataClient("Default", configure);
+    }
+    
+    /// <summary>
+    /// Add D365 OData client from configuration section with fluent builder
+    /// </summary>
+    /// <param name="services">The service collection</param>
+    /// <param name="name">Unique name for this D365 instance</param>
+    /// <param name="configuration">Configuration root</param>
+    /// <param name="sectionName">Section name in config</param>
+    /// <example>
+    /// <code>
+    /// // appsettings.json:
+    /// // { "D365Cloud": { "ClientId": "...", "Resource": "..." } }
+    /// // { "D365OnPrem": { "TokenEndpoint": "...", "Resource": "..." } }
+    /// 
+    /// builder.Services.AddD365ODataClient("Cloud", builder.Configuration, "D365Cloud");
+    /// builder.Services.AddD365ODataClient("OnPrem", builder.Configuration, "D365OnPrem");
+    /// </code>
+    /// </example>
+    public static IServiceCollection AddD365ODataClient(
+        this IServiceCollection services,
+        string name,
+        IConfiguration configuration,
+        string sectionName)
+    {
+        return services.AddD365ODataClient(name, d365 => 
+            d365.FromConfiguration(configuration, sectionName));
+    }
+    
+    /// <summary>
+    /// Add default D365 OData client from configuration section
+    /// </summary>
+    public static IServiceCollection AddD365ODataClient(
+        this IServiceCollection services,
+        IConfiguration configuration,
+        string sectionName = "D365")
+    {
+        return services.AddD365ODataClient("Default", configuration, sectionName);
     }
 }

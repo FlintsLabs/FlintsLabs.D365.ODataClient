@@ -8,11 +8,11 @@
         
         <!-- NuGet Package Info -->
         <PackageId>FlintsLabs.D365.ODataClient</PackageId>
-        <Version>1.1.0</Version>
+        <Version>1.2.0</Version>
         <Authors>FlintsLabs</Authors>
         <Company>FlintsLabs</Company>
         <Product>D365 OData Client</Product>
-        <Description>Fluent OData client for Microsoft Dynamics 365 Finance and Operations. Provides a strongly-typed, LINQ-enabled query builder with support for CRUD operations, cross-company queries, and automatic token management. Supports both Azure AD (Cloud) and ADFS (On-Premise) authentication.</Description>
+        <Description>Fluent OData client for Microsoft Dynamics 365 Finance and Operations. Provides a strongly-typed, LINQ-enabled query builder with support for CRUD operations, cross-company queries, and automatic token management. Supports both Azure AD (Cloud) and ADFS (On-Premise) authentication. Supports multiple D365 sources via named service factory.</Description>
         <PackageTags>D365;OData;Dynamics365;FluentAPI;FinanceOperations;FO;SCM;ADFS;AzureAD</PackageTags>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <PackageReadmeFile>README.md</PackageReadmeFile>
@@ -20,7 +20,7 @@
         <PackageProjectUrl>https://github.com/FlintsLabs/FlintsLabs.D365.ODataClient</PackageProjectUrl>
         <RepositoryUrl>https://github.com/FlintsLabs/FlintsLabs.D365.ODataClient</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
-        <PackageReleaseNotes>v1.1.0: Added ADFS authentication support for On-Premise D365. Auto-detects auth type from configuration.</PackageReleaseNotes>
+        <PackageReleaseNotes>v1.2.0: Added fluent builder pattern and multi-source support (ID365ServiceFactory). UseAzureAD()/UseADFS() for auth type selection.</PackageReleaseNotes>
         
         <!-- Package settings -->
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
