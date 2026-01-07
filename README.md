@@ -2,6 +2,9 @@
 
 A fluent OData client for Microsoft Dynamics 365 Finance & Operations.
 
+
+![.NET 8.0](https://img.shields.io/badge/.NET-8.0-512bd4)
+![.NET 10.0](https://img.shields.io/badge/.NET-10.0-512bd4)
 [![NuGet](https://img.shields.io/nuget/v/FlintsLabs.D365.ODataClient.svg)](https://www.nuget.org/packages/FlintsLabs.D365.ODataClient)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -415,6 +418,14 @@ This project includes both **Integration Tests** (xUnit) and an interactive **Te
     cd FlintsLabs.D365.ODataClient.TestConsole
     dotnet run
     ```
+
+### Verification (.NET 10)
+
+This library is verified to support **.NET 10**. To verify compatibility:
+
+```bash
+dotnet test -f net10.0
+```
 
 ---
 
