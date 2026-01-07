@@ -310,13 +310,14 @@ public class D365Query<T>
     public async Task<string> AddAsync(T obj)
     {
         var url = $"{_entity}";
-        _logger.LogInformation("D365 POST: {Url}", GetFullUrl(url));
-
         var json = JsonSerializer.Serialize(obj, new JsonSerializerOptions
         {
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
             WriteIndented = false
         });
+
+        _logger.LogInformation("D365 POST: {Url}", GetFullUrl(url));
+        _logger.LogDebug("Request Body: {Body}", json);
 
         var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
         var httpClient = _httpClientFactory.CreateClient(_options.HttpClientName);
@@ -358,13 +359,14 @@ public class D365Query<T>
             url.Append(_criteria);
         }
 
-        _logger.LogInformation("D365 POST: {Url}", GetFullUrl(url));
-
         var json = JsonSerializer.Serialize(obj, new JsonSerializerOptions
         {
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
             WriteIndented = false
         });
+
+        _logger.LogInformation("D365 POST: {Url}", GetFullUrl(url));
+        _logger.LogDebug("Request Body: {Body}", json);
 
         var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
         var httpClient = _httpClientFactory.CreateClient(_options.HttpClientName);
@@ -405,13 +407,14 @@ public class D365Query<T>
             url.Append(_criteria);
         }
 
-        _logger.LogInformation("D365 POST: {Url}", GetFullUrl(url));
-
         var json = JsonSerializer.Serialize(obj, new JsonSerializerOptions
         {
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
             WriteIndented = false
         });
+
+        _logger.LogInformation("D365 POST: {Url}", GetFullUrl(url));
+        _logger.LogDebug("Request Body: {Body}", json);
 
         var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
         var httpClient = _httpClientFactory.CreateClient(_options.HttpClientName);
@@ -481,13 +484,14 @@ public class D365Query<T>
             url.Append(_criteria);
         }
 
-        _logger.LogInformation("D365 PATCH: {Url}", GetFullUrl(url));
-
         var json = JsonSerializer.Serialize(obj, new JsonSerializerOptions
         {
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
             WriteIndented = false
         });
+
+        _logger.LogInformation("D365 PATCH: {Url}", GetFullUrl(url));
+        _logger.LogDebug("Request Body: {Body}", json);
 
         var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
         var httpClient = _httpClientFactory.CreateClient(_options.HttpClientName);
@@ -554,13 +558,14 @@ public class D365Query<T>
             url.Append(_criteria);
         }
 
-        _logger.LogInformation("D365 PATCH: {Url}", GetFullUrl(url));
-
         var json = JsonSerializer.Serialize(partialObject, new JsonSerializerOptions
         {
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
             WriteIndented = false
         });
+
+        _logger.LogInformation("D365 PATCH: {Url}", GetFullUrl(url));
+        _logger.LogDebug("Request Body: {Body}", json);
 
         var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
         var httpClient = _httpClientFactory.CreateClient(_options.HttpClientName);
