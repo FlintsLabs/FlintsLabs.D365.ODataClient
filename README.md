@@ -395,6 +395,29 @@ await _d365.Entity<Customer>("CustomersV3")
 - **Azure AD**: App Registration with D365 F&O API permissions
 - **ADFS**: Native Application registered in ADFS
 
+## Development
+
+### Running Tests
+
+This project includes both **Integration Tests** (xUnit) and an interactive **Test Console**.
+
+1.  **Configuration**:
+    - Rename `appsettings.example.json` to `appsettings.json` in the test project.
+    - Update with your real D365 credentials (this file is git-ignored).
+
+2.  **Run xUnit Tests** (Automated):
+    ```bash
+    dotnet test
+    ```
+
+3.  **Run Test Console** (Interactive):
+    ```bash
+    cd FlintsLabs.D365.ODataClient.TestConsole
+    dotnet run
+    ```
+
+---
+
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.
