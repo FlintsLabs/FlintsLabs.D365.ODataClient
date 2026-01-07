@@ -1,3 +1,4 @@
+using FlintsLabs.D365.ODataClient.Enums;
 using FlintsLabs.D365.ODataClient.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
@@ -107,6 +108,29 @@ public static class ServiceCollectionExtensions
     {
         return services.AddD365ODataClient(name, d365 => 
             d365.FromConfiguration(configuration, sectionName));
+    }
+    
+    /// <summary>
+    /// Add named D365 OData client service using D365ServiceScope enum
+    /// </summary>
+    public static IServiceCollection AddD365ODataClient(
+        this IServiceCollection services,
+        D365ServiceScope scope,
+        Action<D365ClientBuilder> configure)
+    {
+        return services.AddD365ODataClient(scope.ToString(), configure);
+    }
+
+    /// <summary>
+    /// Add named D365 OData client from configuration using D365ServiceScope enum
+    /// </summary>
+    public static IServiceCollection AddD365ODataClient(
+        this IServiceCollection services,
+        D365ServiceScope scope,
+        IConfiguration configuration,
+        string sectionName)
+    {
+        return services.AddD365ODataClient(scope.ToString(), configuration, sectionName);
     }
     
     /// <summary>

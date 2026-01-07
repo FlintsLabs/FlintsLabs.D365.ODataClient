@@ -40,6 +40,15 @@ public class D365ClientBuilder
         Options.AuthType = D365AuthType.ADFS;
         return this;
     }
+
+    /// <summary>
+    /// Set Scope (optional, for Dataverse or specific API permissions)
+    /// </summary>
+    public D365ClientBuilder WithScope(string scope)
+    {
+        Options.Scope = scope;
+        return this;
+    }
     
     /// <summary>
     /// Set Client ID (App Registration)
@@ -119,10 +128,16 @@ public class D365ClientBuilder
         Options.OrganizationUrl = section["OrganizationUrl"];
         Options.TokenEndpoint = section["TokenEndpoint"];
         Options.GrantType = section["GrantType"] ?? "client_credentials";
+        Options.Scope = section["Scope"];
         
         // Auto-detect ADFS
-        if (string.Equals(Options.TenantId, "adfs", StringComparison.OrdinalIgnoreCase) 
-            || !string.IsNullOrWhiteSpace(Options.TokenEndpoint))
+        // Logic: If TenantId is explicitly "adfs" OR (TokenEndpoint is present AND TenantId is NOT a GUID)
+        // This prevents Dataverse config (which has TokenEndpoint + GUID TenantId) from being detected as ADFS
+        bool isExplicitAdfs = string.Equals(Options.TenantId, "adfs", StringComparison.OrdinalIgnoreCase);
+        bool hasTokenEndpoint = !string.IsNullOrWhiteSpace(Options.TokenEndpoint);
+        bool isTenantGuid = Guid.TryParse(Options.TenantId, out _);
+
+        if (isExplicitAdfs || (hasTokenEndpoint && !isTenantGuid))
         {
             Options.AuthType = D365AuthType.ADFS;
         }
@@ -141,6 +156,11 @@ public class D365ClientOptions
     /// Default: AzureAD
     /// </summary>
     public D365AuthType AuthType { get; set; } = D365AuthType.AzureAD;
+     
+     /// <summary>
+     /// Custom Scope (optional). If not set, uses Resource + "/.default"
+     /// </summary>
+     public string? Scope { get; set; }
     
     /// <summary>
     /// Client ID (App Registration in Azure AD or ADFS)
@@ -186,12 +206,20 @@ public class D365ClientOptions
     {
         if (!string.IsNullOrWhiteSpace(OrganizationUrl))
         {
-            return OrganizationUrl.TrimEnd('/') + "/data/";
+            var url = OrganizationUrl.TrimEnd('/');
+            // If already ends in /data or /api/data/vX.X -> don't append /data/
+            if (url.EndsWith("/data", StringComparison.OrdinalIgnoreCase) || 
+                url.Contains("/api/data/", StringComparison.OrdinalIgnoreCase))
+            {
+                return url + "/";
+            }
+            return url + "/data/";
         }
         
         if (!string.IsNullOrWhiteSpace(Resource))
         {
-            return Resource.TrimEnd('/') + "/data/";
+            var url = Resource.TrimEnd('/');
+            return url + "/data/";
         }
         
         return string.Empty;

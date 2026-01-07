@@ -53,7 +53,7 @@ public class D365AccessTokenProvider : ID365AccessTokenProvider
     {
         try
         {
-            _logger.LogInformation("Acquiring access token from Azure AD");
+            _logger.LogInformation("Acquiring access token from Azure AD / Dataverse");
             
             var authBuilder = ConfidentialClientApplicationBuilder
                 .Create(_options.ClientId)
@@ -62,7 +62,10 @@ public class D365AccessTokenProvider : ID365AccessTokenProvider
                 .WithAuthority(AzureCloudInstance.AzurePublic, _options.TenantId)
                 .Build();
 
-            string[] scopes = [_options.Resource + "/.default"];
+            // Use explicit Scope if provided (Dataverse), otherwise use Resource + /.default (F&O)
+            string[] scopes = !string.IsNullOrWhiteSpace(_options.Scope) 
+                ? [_options.Scope] 
+                : [_options.Resource?.TrimEnd('/') + "/.default"];
 
             AuthenticationResult token = await authBuilder.AcquireTokenForClient(scopes).ExecuteAsync();
             _expiresOn = token.ExpiresOn.UtcDateTime;
