@@ -50,6 +50,10 @@ public static class ServiceCollectionExtensions
         var builder = new D365ClientBuilder();
         configure(builder);
         
+        // Set HttpClient name based on service name
+        var httpClientName = $"D365Endpoint_{name}";
+        builder.Options.HttpClientName = httpClientName;
+        
         // Store registration
         _registrations[name] = builder.Options;
         

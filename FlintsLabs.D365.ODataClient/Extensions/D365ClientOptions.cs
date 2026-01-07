@@ -163,6 +163,11 @@ public class D365ClientOptions
      public string? Scope { get; set; }
     
     /// <summary>
+    /// Internal: HttpClient name for IHttpClientFactory
+    /// </summary>
+    internal string HttpClientName { get; set; } = "D365Endpoint";
+    
+    /// <summary>
     /// Client ID (App Registration in Azure AD or ADFS)
     /// </summary>
     public string? ClientId { get; set; }

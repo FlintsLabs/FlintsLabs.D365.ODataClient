@@ -311,7 +311,7 @@ public class D365Query<T>
         });
 
         var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
-        var httpClient = _httpClientFactory.CreateClient("D365Endpoint");
+        var httpClient = _httpClientFactory.CreateClient(_options.HttpClientName);
 
         var request = await CreateHttpRequestMessageAsync(HttpMethod.Post, url);
         request.Content = content;
@@ -359,7 +359,7 @@ public class D365Query<T>
         });
 
         var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
-        var httpClient = _httpClientFactory.CreateClient("D365Endpoint");
+        var httpClient = _httpClientFactory.CreateClient(_options.HttpClientName);
 
         var request = await CreateHttpRequestMessageAsync(HttpMethod.Post, url.ToString());
         request.Content = content;
@@ -406,7 +406,7 @@ public class D365Query<T>
         });
 
         var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
-        var httpClient = _httpClientFactory.CreateClient("D365Endpoint");
+        var httpClient = _httpClientFactory.CreateClient(_options.HttpClientName);
 
         var request = await CreateHttpRequestMessageAsync(HttpMethod.Post, url.ToString());
         request.Content = content;
@@ -482,7 +482,7 @@ public class D365Query<T>
         });
 
         var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
-        var httpClient = _httpClientFactory.CreateClient("D365Endpoint");
+        var httpClient = _httpClientFactory.CreateClient(_options.HttpClientName);
         var request = await CreateHttpRequestMessageAsync(HttpMethod.Patch, url.ToString());
         request.Content = content;
 
@@ -555,7 +555,7 @@ public class D365Query<T>
         });
 
         var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
-        var httpClient = _httpClientFactory.CreateClient("D365Endpoint");
+        var httpClient = _httpClientFactory.CreateClient(_options.HttpClientName);
         var request = await CreateHttpRequestMessageAsync(HttpMethod.Patch, url.ToString());
         request.Content = content;
 
@@ -602,7 +602,7 @@ public class D365Query<T>
 
         _logger.LogInformation("DELETE {Url}", url);
 
-        var httpClient = _httpClientFactory.CreateClient("D365Endpoint");
+        var httpClient = _httpClientFactory.CreateClient(_options.HttpClientName);
         var request = await CreateHttpRequestMessageAsync(HttpMethod.Delete, url.ToString());
         var response = await httpClient.SendAsync(request);
         var result = await response.Content.ReadAsStringAsync();
@@ -695,7 +695,7 @@ public class D365Query<T>
         {
             _logger.LogInformation("Fetching data from: {Url}", url);
 
-            var httpClient = _httpClientFactory.CreateClient("D365Endpoint");
+            var httpClient = _httpClientFactory.CreateClient(_options.HttpClientName);
             var request = await CreateHttpRequestMessageAsync(HttpMethod.Get, url);
             var response = await httpClient.SendAsync(request, cancellationToken);
 

@@ -280,7 +280,7 @@ public class D365Service : ID365Service
     {
         try
         {
-            var httpClient = _httpClientFactory.CreateClient("D365Endpoint");
+            var httpClient = _httpClientFactory.CreateClient(_options.HttpClientName);
             var urlQuery = $"{_entity}{_criteria}";
             var request = await CreateHttpRequestMessageAsync(HttpMethod.Get, urlQuery);
             var responseMessage = await httpClient.SendAsync(request);
@@ -338,7 +338,7 @@ public class D365Service : ID365Service
     {
         _logger.LogInformation("Fetching data from: {Url}", url);
 
-        var httpClient = _httpClientFactory.CreateClient("D365Endpoint");
+        var httpClient = _httpClientFactory.CreateClient(_options.HttpClientName);
         var request = await CreateHttpRequestMessageAsync(HttpMethod.Get, url);
         var responseMessage = await httpClient.SendAsync(request);
 
@@ -433,7 +433,7 @@ public class D365Service : ID365Service
             var request = await CreateHttpRequestMessageAsync(HttpMethod.Post, urlQuery);
             request.Content = content;
 
-            var httpClient = _httpClientFactory.CreateClient("D365Endpoint");
+            var httpClient = _httpClientFactory.CreateClient(_options.HttpClientName);
             var responseMessage = await httpClient.SendAsync(request);
 
             return responseMessage;
@@ -456,7 +456,7 @@ public class D365Service : ID365Service
             var request = await CreateHttpRequestMessageAsync(HttpMethod.Post, urlQuery);
             request.Content = content;
 
-            var httpClient = _httpClientFactory.CreateClient("D365Endpoint");
+            var httpClient = _httpClientFactory.CreateClient(_options.HttpClientName);
             var responseMessage = await httpClient.SendAsync(request);
 
             if (!responseMessage.IsSuccessStatusCode)
@@ -508,7 +508,7 @@ public class D365Service : ID365Service
             var request = await CreateHttpRequestMessageAsync(HttpMethod.Patch, urlQuery);
             request.Content = content;
 
-            var httpClient = _httpClientFactory.CreateClient("D365Endpoint");
+            var httpClient = _httpClientFactory.CreateClient(_options.HttpClientName);
             var responseMessage = await httpClient.SendAsync(request);
 
             if (!responseMessage.IsSuccessStatusCode)
@@ -544,7 +544,7 @@ public class D365Service : ID365Service
         {
             var urlQuery = $"{_entity}({_identity})/{_criteria}";
             var request = await CreateHttpRequestMessageAsync(HttpMethod.Delete, urlQuery);
-            var httpClient = _httpClientFactory.CreateClient("D365Endpoint");
+            var httpClient = _httpClientFactory.CreateClient(_options.HttpClientName);
             var responseMessage = await httpClient.SendAsync(request);
 
             if (!responseMessage.IsSuccessStatusCode)
