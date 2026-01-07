@@ -419,6 +419,26 @@ This project includes both **Integration Tests** (xUnit) and an interactive **Te
     dotnet run
     ```
 
+### Logging
+
+All HTTP requests are logged with full URLs. Enable Debug level to see request bodies:
+
+```json
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Debug"
+    }
+  }
+}
+```
+
+**Example output:**
+```
+info: D365 GET: https://biopharm.../data/ReleasedProductsV2?cross-company=true&$top=3
+dbug: Request Body: {"SalesOrderNumber":"SO-001",...}
+```
+
 ### Verification (.NET 10)
 
 This library is verified to support **.NET 10**. To verify compatibility:

@@ -365,7 +365,7 @@ public class D365Query<T>
             WriteIndented = false
         });
 
-        _logger.LogInformation("D365 POST: {Url}", GetFullUrl(url));
+        _logger.LogInformation("D365 POST: {Url}", GetFullUrl(url.ToString()));
         _logger.LogDebug("Request Body: {Body}", json);
 
         var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
@@ -413,7 +413,7 @@ public class D365Query<T>
             WriteIndented = false
         });
 
-        _logger.LogInformation("D365 POST: {Url}", GetFullUrl(url));
+        _logger.LogInformation("D365 POST: {Url}", GetFullUrl(url.ToString()));
         _logger.LogDebug("Request Body: {Body}", json);
 
         var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
@@ -490,7 +490,7 @@ public class D365Query<T>
             WriteIndented = false
         });
 
-        _logger.LogInformation("D365 PATCH: {Url}", GetFullUrl(url));
+        _logger.LogInformation("D365 PATCH: {Url}", GetFullUrl(url.ToString()));
         _logger.LogDebug("Request Body: {Body}", json);
 
         var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
@@ -564,7 +564,7 @@ public class D365Query<T>
             WriteIndented = false
         });
 
-        _logger.LogInformation("D365 PATCH: {Url}", GetFullUrl(url));
+        _logger.LogInformation("D365 PATCH: {Url}", GetFullUrl(url.ToString()));
         _logger.LogDebug("Request Body: {Body}", json);
 
         var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
@@ -613,7 +613,7 @@ public class D365Query<T>
             url.Append(_criteria);
         }
 
-        _logger.LogInformation("D365 DELETE: {Url}", GetFullUrl(url));
+        _logger.LogInformation("D365 DELETE: {Url}", GetFullUrl(url.ToString()));
 
         var httpClient = _httpClientFactory.CreateClient(_options.HttpClientName);
         var request = await CreateHttpRequestMessageAsync(HttpMethod.Delete, url.ToString());
