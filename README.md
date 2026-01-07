@@ -10,8 +10,9 @@ A fluent OData client for Microsoft Dynamics 365 Finance & Operations.
 - 🔗 **Fluent API** - Chainable query builder with IntelliSense support
 - 🔍 **LINQ Support** - Write queries using lambda expressions
 - 🏢 **Cross-Company** - Query across legal entities
-- 🔐 **Auto Token Management** - Automatic token refresh via Microsoft Entra ID
+- 🔐 **Multi-Auth Support** - Azure AD (Cloud) and ADFS (On-Premise)
 - 📦 **CRUD Operations** - Full Create, Read, Update, Delete support
+- 🌐 **Multi-Source** - Connect to multiple D365 instances simultaneously
 
 ## Installation
 
@@ -19,28 +20,29 @@ A fluent OData client for Microsoft Dynamics 365 Finance & Operations.
 dotnet add package FlintsLabs.D365.ODataClient
 ```
 
-## Quick Start
+---
 
-### 1. Configure Services
+## Configuration
+
+### Option 1: Azure AD (Cloud D365)
 
 ```csharp
-// Program.cs
-builder.Services.AddD365ODataClient(options =>
+// Program.cs - Fluent Builder
+builder.Services.AddD365ODataClient(d365 => 
 {
-    options.ClientId = builder.Configuration["D365:ClientId"];
-    options.ClientSecret = builder.Configuration["D365:ClientSecret"];
-    options.TenantId = builder.Configuration["D365:TenantId"];
-    options.Resource = builder.Configuration["D365:Resource"]; // e.g. https://your-org.operations.dynamics.com
+    d365.UseAzureAD()
+        .WithClientId("your-client-id")
+        .WithClientSecret("your-client-secret")
+        .WithTenantId("your-tenant-id")
+        .WithResource("https://your-org.operations.dynamics.com");
 });
 ```
-
-### 2. Add Configuration
 
 ```json
 // appsettings.json
 {
   "D365": {
-    "ClientId": "your-app-registration-client-id",
+    "ClientId": "your-client-id",
     "ClientSecret": "your-client-secret",
     "TenantId": "your-tenant-id",
     "Resource": "https://your-org.operations.dynamics.com"
@@ -48,7 +50,85 @@ builder.Services.AddD365ODataClient(options =>
 }
 ```
 
-### 3. Use in Your Code
+```csharp
+// Or from configuration
+builder.Services.AddD365ODataClient(builder.Configuration, "D365");
+```
+
+---
+
+### Option 2: ADFS (On-Premise D365)
+
+```csharp
+// Program.cs - Fluent Builder for ADFS
+builder.Services.AddD365ODataClient(d365 => 
+{
+    d365.UseADFS()
+        .WithTokenEndpoint("https://fs.your-company.com/adfs/oauth2/token")
+        .WithClientId("your-client-id")
+        .WithClientSecret("your-client-secret")
+        .WithResource("https://ax.your-company.com")
+        .WithOrganizationUrl("https://ax.your-company.com/namespaces/AXSF/");
+});
+```
+
+```json
+// appsettings.json for ADFS
+{
+  "D365OnPrem": {
+    "TenantId": "adfs",
+    "TokenEndpoint": "https://fs.your-company.com/adfs/oauth2/token",
+    "ClientId": "your-client-id",
+    "ClientSecret": "your-client-secret",
+    "Resource": "https://ax.your-company.com",
+    "OrganizationUrl": "https://ax.your-company.com/namespaces/AXSF/",
+    "GrantType": "client_credentials"
+  }
+}
+```
+
+```csharp
+// From configuration (auto-detects ADFS when TenantId="adfs" or TokenEndpoint is set)
+builder.Services.AddD365ODataClient(builder.Configuration, "D365OnPrem");
+```
+
+---
+
+### Option 3: Multiple D365 Sources (Cloud + On-Premise)
+
+```csharp
+// Program.cs - Named Services for multiple D365 sources
+builder.Services.AddD365ODataClient("Cloud", d365 => 
+{
+    d365.UseAzureAD()
+        .WithClientId("cloud-client-id")
+        .WithClientSecret("cloud-secret")
+        .WithTenantId("cloud-tenant-id")
+        .WithResource("https://cloud.operations.dynamics.com");
+});
+
+builder.Services.AddD365ODataClient("OnPrem", d365 => 
+{
+    d365.UseADFS()
+        .WithTokenEndpoint("https://fs.company.com/adfs/oauth2/token")
+        .WithClientId("onprem-client-id")
+        .WithClientSecret("onprem-secret")
+        .WithResource("https://ax.company.com")
+        .WithOrganizationUrl("https://ax.company.com/namespaces/AXSF/");
+});
+```
+
+```csharp
+// Or from configuration with named sections
+builder.Services.AddD365ODataClient("Cloud", builder.Configuration, "D365Cloud");
+builder.Services.AddD365ODataClient("OnPrem", builder.Configuration, "D365OnPrem");
+```
+
+---
+
+## Usage
+
+### Single Source - Inject ID365Service
 
 ```csharp
 public class ProductService
@@ -57,7 +137,6 @@ public class ProductService
     
     public ProductService(ID365Service d365) => _d365 = d365;
     
-    // Query with LINQ
     public async Task<List<Product>> GetProductsAsync()
     {
         return await _d365.Entity<Product>("ReleasedProductsV2")
@@ -66,34 +145,69 @@ public class ProductService
             .Select(p => new { p.ItemNumber, p.ProductName })
             .ToListAsync();
     }
+}
+```
+
+### Multiple Sources - Inject ID365ServiceFactory
+
+```csharp
+public class SyncService
+{
+    private readonly ID365ServiceFactory _d365Factory;
     
-    // Update with Identity
-    public async Task<string> UpdateProductAsync(Product product)
+    public SyncService(ID365ServiceFactory d365Factory) => _d365Factory = d365Factory;
+    
+    public async Task SyncDataAsync()
     {
-        return await _d365.Entity<Product>("ReleasedProductsV2")
+        // Get specific D365 source by name
+        var cloudD365 = _d365Factory.GetService("Cloud");
+        var onPremD365 = _d365Factory.GetService("OnPrem");
+        
+        // Query from Cloud
+        var cloudProducts = await cloudD365
+            .Entity<Product>("ReleasedProductsV2")
             .CrossCompany()
-            .AddIdentity("dataAreaId", product.DataAreaId)
-            .AddIdentity("ItemNumber", product.ItemNumber)
-            .UpdateAsync(product);
-    }
-    
-    // Create new record
-    public async Task<string> CreateProductAsync(Product product)
-    {
-        return await _d365.Entity<Product>("ReleasedProductsV2")
-            .AddAsync(product);
-    }
-    
-    // Delete record
-    public async Task<string> DeleteProductAsync(string dataAreaId, string itemNumber)
-    {
-        return await _d365.Entity<Product>("ReleasedProductsV2")
-            .AddIdentity("dataAreaId", dataAreaId)
-            .AddIdentity("ItemNumber", itemNumber)
-            .DeleteAsync();
+            .ToListAsync();
+        
+        // Query from On-Premise
+        var onPremOrders = await onPremD365
+            .Entity<SalesOrder>("SalesOrderHeadersV2")
+            .CrossCompany()
+            .ToListAsync();
     }
 }
 ```
+
+---
+
+## CRUD Operations
+
+```csharp
+// Create
+await _d365.Entity<Customer>("CustomersV3").AddAsync(newCustomer);
+
+// Read
+var customers = await _d365.Entity<Customer>("CustomersV3")
+    .CrossCompany()
+    .Where(c => c.CustomerAccount == "CUST001")
+    .ToListAsync();
+
+// Update
+await _d365.Entity<Customer>("CustomersV3")
+    .AddIdentity("CustomerAccount", "CUST001")
+    .AddIdentity("dataAreaId", "usmf")
+    .CrossCompany()
+    .UpdateAsync(new { CustomerName = "Updated Name" });
+
+// Delete
+await _d365.Entity<Customer>("CustomersV3")
+    .AddIdentity("CustomerAccount", "CUST001")
+    .AddIdentity("dataAreaId", "usmf")
+    .CrossCompany()
+    .DeleteAsync();
+```
+
+---
 
 ## API Reference
 
@@ -122,11 +236,14 @@ public class ProductService
 | `UpdateAsync(T entity)` | Update existing record |
 | `DeleteAsync()` | Delete record |
 
+---
+
 ## Requirements
 
 - .NET 8.0 or later
 - Microsoft Dynamics 365 Finance & Operations
-- Azure App Registration with appropriate D365 permissions
+- **Azure AD**: App Registration with D365 F&O API permissions
+- **ADFS**: Native Application registered in ADFS
 
 ## License
 
