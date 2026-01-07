@@ -211,7 +211,7 @@ public class D365ExpressionVisitor : ExpressionVisitor
         // Handle DateTime and other .NET method calls by evaluating the value
         try
         {
-            var instance = node.Object != null ? GetValue(node.Object as MemberExpression) : null;
+            var instance = node.Object is MemberExpression objMember ? GetValue(objMember) : null;
             var args = node.Arguments.Select(GetValueFromExpression).ToArray();
 
             var result = node.Method.Invoke(instance, args);
@@ -260,7 +260,7 @@ public class D365ExpressionVisitor : ExpressionVisitor
 
     private static object? EvaluateMethodCall(MethodCallExpression mc)
     {
-        var instance = mc.Object != null ? GetValue(mc.Object as MemberExpression) : null;
+        var instance = mc.Object is MemberExpression objMember ? GetValue(objMember) : null;
         var args = mc.Arguments.Select(GetValueFromExpression).ToArray();
         try
         {

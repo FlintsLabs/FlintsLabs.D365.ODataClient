@@ -16,6 +16,7 @@
         <PackageTags>D365;OData;Dynamics365;FluentAPI;FinanceOperations;FO;SCM</PackageTags>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageIcon>icon.png</PackageIcon>
         <RepositoryUrl>https://github.com/FlintsLabs/FlintsLabs.D365.ODataClient</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
         
@@ -26,6 +27,7 @@
 
     <ItemGroup>
         <None Include="..\README.md" Pack="true" PackagePath="\" />
+        <None Include="Assets\FlintsLabs-Logo-512.png" Pack="true" PackagePath="icon.png" />
     </ItemGroup>
 
     <ItemGroup>

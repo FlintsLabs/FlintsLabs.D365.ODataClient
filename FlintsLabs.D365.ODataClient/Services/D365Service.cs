@@ -28,7 +28,6 @@ public class D365Service : ID365Service
     private string? AccessToken { get; set; }
     private string? _entity { get; set; }
     private string? _criteria { get; set; }
-    private Type? _entityType;
     private Dictionary<string, object?> _identities { get; set; } = [];
 
     private string _identity => string.Join(",",
