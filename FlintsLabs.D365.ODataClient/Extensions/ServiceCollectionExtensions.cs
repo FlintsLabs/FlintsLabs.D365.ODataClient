@@ -73,6 +73,9 @@ public static class ServiceCollectionExtensions
         // Register factory (singleton, handles all named services)
         services.AddSingleton<ID365ServiceFactory>(sp => 
             new D365ServiceFactory(sp, new Dictionary<string, D365ClientOptions>(_registrations)));
+
+        // Register default ID365Service (scoped) for direct injection
+        services.AddScoped<ID365Service>(sp => sp.GetRequiredService<ID365ServiceFactory>().GetService());
         
         return services;
     }

@@ -4,3 +4,8 @@ obj/
 riderModule.iml
 /_ReSharper.Caches/
 /.idea/
+
+# Configuration
+**/appsettings.json
+!**/appsettings.example.json
+secrets.txt
