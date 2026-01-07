@@ -163,57 +163,154 @@ builder.Services.AddD365ODataClient(D365ServiceScope.OnPrem, builder.Configurati
 
 ---
 
-## Usage
+## Usage in ASP.NET Core
 
-### Single Source - Inject ID365Service
+### Quick Start (Single D365 Source)
 
+Use this pattern when connecting to **one D365 instance only**.
+
+**Step 1: Configure `appsettings.json`**
+```json
+{
+  "D365": {
+    "ClientId": "your-client-id",
+    "ClientSecret": "your-client-secret",
+    "TenantId": "your-tenant-id",
+    "Resource": "https://your-org.operations.dynamics.com"
+  }
+}
+```
+
+**Step 2: Register in `Program.cs`**
 ```csharp
-public class ProductService
+// Register D365 client (no name = "Default")
+builder.Services.AddD365ODataClient(builder.Configuration, "D365");
+```
+
+**Step 3: Inject `ID365Service` in Controller**
+```csharp
+[ApiController]
+[Route("api/[controller]")]
+public class ProductsController : ControllerBase
 {
     private readonly ID365Service _d365;
-    
-    public ProductService(ID365Service d365) => _d365 = d365;
-    
-    public async Task<List<Product>> GetProductsAsync()
+
+    // DI will inject ID365Service automatically
+    public ProductsController(ID365Service d365)
     {
-        return await _d365.Entity<Product>("ReleasedProductsV2")
+        _d365 = d365;
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> GetProducts()
+    {
+        var products = await _d365.Entity<Product>("ReleasedProductsV2")
             .CrossCompany()
             .Where(p => p.ItemNumber.StartsWith("A"))
-            .Select(p => new { p.ItemNumber, p.ProductName })
+            .Take(10)
             .ToListAsync();
+
+        return Ok(products);
     }
 }
 ```
 
-### Multiple Sources - Inject ID365ServiceFactory
+---
+
+### Advanced (Multiple D365 Sources)
+
+Use this pattern when connecting to **multiple D365 instances** (e.g., Cloud + On-Premise, Production + Sandbox).
+
+**Step 1: Configure `appsettings.json`** with multiple sections
+```json
+{
+  "D365Cloud": {
+    "ClientId": "cloud-client-id",
+    "ClientSecret": "cloud-secret",
+    "TenantId": "cloud-tenant-id",
+    "Resource": "https://cloud.operations.dynamics.com"
+  },
+  "D365OnPrem": {
+    "TenantId": "adfs",
+    "TokenEndpoint": "https://fs.company.com/adfs/oauth2/token",
+    "ClientId": "onprem-client-id",
+    "ClientSecret": "onprem-secret",
+    "Resource": "https://ax.company.com",
+    "OrganizationUrl": "https://ax.company.com/namespaces/AXSF/"
+  }
+}
+```
+
+**Step 2: Register with Names in `Program.cs`**
+
+> ⚠️ **Important**: The name you use here must match what you use in `GetService("name")` later!
 
 ```csharp
-public class SyncService
+// Option A: Use Enum (recommended - prevents typos)
+builder.Services.AddD365ODataClient(D365ServiceScope.Cloud, builder.Configuration, "D365Cloud");
+builder.Services.AddD365ODataClient(D365ServiceScope.OnPrem, builder.Configuration, "D365OnPrem");
+
+// Option B: Use custom string names (flexible)
+builder.Services.AddD365ODataClient("BiopharmSandbox", builder.Configuration, "D365Cloud");
+builder.Services.AddD365ODataClient("VCF-Production", builder.Configuration, "D365OnPrem");
+```
+
+**Step 3: Inject `ID365ServiceFactory` in Controller**
+
+```csharp
+[ApiController]
+[Route("api/[controller]")]
+public class SyncController : ControllerBase
 {
     private readonly ID365ServiceFactory _d365Factory;
-    
-    public SyncService(ID365ServiceFactory d365Factory) => _d365Factory = d365Factory;
-    
-    public async Task SyncDataAsync()
+
+    // DI will inject the factory (not individual services)
+    public SyncController(ID365ServiceFactory d365Factory)
     {
-        // Get specific D365 source by name
-        var cloudD365 = _d365Factory.GetService("Cloud");
-        var onPremD365 = _d365Factory.GetService("OnPrem");
+        _d365Factory = d365Factory;
+    }
+
+    [HttpGet("cloud-products")]
+    public async Task<IActionResult> GetFromCloud()
+    {
+        // Get service by the SAME name used in Program.cs
+        var d365 = _d365Factory.GetService("Cloud");  // Matches D365ServiceScope.Cloud
         
-        // Query from Cloud
-        var cloudProducts = await cloudD365
-            .Entity<Product>("ReleasedProductsV2")
+        var products = await d365.Entity<Product>("ReleasedProductsV2")
             .CrossCompany()
+            .Take(10)
             .ToListAsync();
+
+        return Ok(products);
+    }
+
+    [HttpGet("onprem-orders")]
+    public async Task<IActionResult> GetFromOnPrem()
+    {
+        var d365 = _d365Factory.GetService("OnPrem");  // Matches D365ServiceScope.OnPrem
         
-        // Query from On-Premise
-        var onPremOrders = await onPremD365
-            .Entity<SalesOrder>("SalesOrderHeadersV2")
+        var orders = await d365.Entity<SalesOrder>("SalesOrderHeadersV2")
             .CrossCompany()
+            .Take(10)
             .ToListAsync();
+
+        return Ok(orders);
     }
 }
 ```
+
+---
+
+### Naming Convention Summary
+
+| Registration Method | GetService() Call | Notes |
+|---------------------|-------------------|-------|
+| `AddD365ODataClient(config, "D365")` | `GetService()` or `GetService("Default")` | Default name |
+| `AddD365ODataClient(D365ServiceScope.Cloud, ...)` | `GetService("Cloud")` | Enum → String |
+| `AddD365ODataClient(D365ServiceScope.OnPrem, ...)` | `GetService("OnPrem")` | Enum → String |
+| `AddD365ODataClient("MyCustomName", ...)` | `GetService("MyCustomName")` | Custom string |
+
+> 💡 **Tip**: Use `D365ServiceScope` enum to prevent typos. The enum values are: `Default`, `Cloud`, `OnPrem`, `Dataverse`
 
 ---
 
