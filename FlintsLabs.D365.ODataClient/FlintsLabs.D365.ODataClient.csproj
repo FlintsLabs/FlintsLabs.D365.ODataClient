@@ -1,0 +1,40 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <LangVersion>latest</LangVersion>
+        
+        <!-- NuGet Package Info -->
+        <PackageId>FlintsLabs.D365.ODataClient</PackageId>
+        <Version>1.0.0</Version>
+        <Authors>FlintsLabs</Authors>
+        <Company>FlintsLabs</Company>
+        <Product>D365 OData Client</Product>
+        <Description>Fluent OData client for Microsoft Dynamics 365 Finance and Operations. Provides a strongly-typed, LINQ-enabled query builder with support for CRUD operations, cross-company queries, and automatic token management.</Description>
+        <PackageTags>D365;OData;Dynamics365;FluentAPI;FinanceOperations;FO;SCM</PackageTags>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <RepositoryUrl>https://github.com/FlintsLabs/FlintsLabs.D365.ODataClient</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        
+        <!-- Package settings -->
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <None Include="..\README.md" Pack="true" PackagePath="\" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.Identity.Client" Version="4.67.2" />
+        <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.0" />
+        <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="9.0.0" />
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0" />
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.0" />
+        <PackageReference Include="Microsoft.AspNetCore.WebUtilities" Version="8.0.11" />
+    </ItemGroup>
+
+</Project>
