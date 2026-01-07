@@ -10,9 +10,9 @@ A fluent OData client for Microsoft Dynamics 365 Finance & Operations.
 - 🔗 **Fluent API** - Chainable query builder with IntelliSense support
 - 🔍 **LINQ Support** - Write queries using lambda expressions
 - 🏢 **Cross-Company** - Query across legal entities
-- 🔐 **Multi-Auth Support** - Azure AD (Cloud) and ADFS (On-Premise)
+- 🔐 **Multi-Auth Support** - Azure AD (Cloud), ADFS (On-Premise), and **Dataverse**
 - 📦 **CRUD Operations** - Full Create, Read, Update, Delete support
-- 🌐 **Multi-Source** - Connect to multiple D365 instances simultaneously
+- 🌐 **Multi-Source** - Connect to multiple D365 instances (F&O, Dataverse) simultaneously
 
 ## Installation
 
@@ -27,7 +27,7 @@ dotnet add package FlintsLabs.D365.ODataClient
 ### Option 1: Azure AD (Cloud D365)
 
 ```csharp
-// Program.cs - Fluent Builder
+// Program.cs - Fluent Builder using Enum
 builder.Services.AddD365ODataClient(d365 => 
 {
     d365.UseAzureAD()
@@ -93,12 +93,49 @@ builder.Services.AddD365ODataClient(builder.Configuration, "D365OnPrem");
 ```
 
 ---
+ 
+ ### Option 3: Microsoft Dataverse (CRM / Power Platform)
+ 
+ ```csharp
+ // Program.cs - Fluent Builder for Dataverse
+ builder.Services.AddD365ODataClient(D365ServiceScope.Dataverse, d365 => 
+ {
+     d365.WithClientId("your-client-id")
+         .WithClientSecret("your-client-secret")
+         .WithTenantId("your-tenant-id")
+         .WithResource("https://org.api.crm5.dynamics.com")
+         .WithScope("https://org.api.crm5.dynamics.com/.default"); // Optional explicit scope
+ });
+ ```
+ 
+ ```json
+ // appsettings.json
+ {
+   "DataverseConfigs": {
+     "ClientId": "your-client-id",
+     "ClientSecret": "your-client-secret",
+     "TenantId": "your-tenant-id",
+     "Resource": "https://org.api.crm5.dynamics.com",
+     "TokenEndpoint": "https://login.microsoftonline.com/..." // Optional
+   }
+ }
+ ```
+ 
+ ```csharp
+ // From configuration
+ builder.Services.AddD365ODataClient(
+     D365ServiceScope.Dataverse, 
+     builder.Configuration, 
+     "DataverseConfigs");
+ ```
+ 
+ ---
 
-### Option 3: Multiple D365 Sources (Cloud + On-Premise)
+### Option 4: Multiple D365 Sources (Cloud + On-Premise)
 
 ```csharp
 // Program.cs - Named Services for multiple D365 sources
-builder.Services.AddD365ODataClient("Cloud", d365 => 
+builder.Services.AddD365ODataClient(D365ServiceScope.Cloud, d365 => 
 {
     d365.UseAzureAD()
         .WithClientId("cloud-client-id")
@@ -107,7 +144,7 @@ builder.Services.AddD365ODataClient("Cloud", d365 =>
         .WithResource("https://cloud.operations.dynamics.com");
 });
 
-builder.Services.AddD365ODataClient("OnPrem", d365 => 
+builder.Services.AddD365ODataClient(D365ServiceScope.OnPrem, d365 => 
 {
     d365.UseADFS()
         .WithTokenEndpoint("https://fs.company.com/adfs/oauth2/token")
@@ -120,8 +157,8 @@ builder.Services.AddD365ODataClient("OnPrem", d365 =>
 
 ```csharp
 // Or from configuration with named sections
-builder.Services.AddD365ODataClient("Cloud", builder.Configuration, "D365Cloud");
-builder.Services.AddD365ODataClient("OnPrem", builder.Configuration, "D365OnPrem");
+builder.Services.AddD365ODataClient(D365ServiceScope.Cloud, builder.Configuration, "D365Cloud");
+builder.Services.AddD365ODataClient(D365ServiceScope.OnPrem, builder.Configuration, "D365OnPrem");
 ```
 
 ---
