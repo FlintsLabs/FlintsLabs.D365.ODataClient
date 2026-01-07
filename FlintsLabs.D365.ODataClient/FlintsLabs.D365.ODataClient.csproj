@@ -8,7 +8,7 @@
         
         <!-- NuGet Package Info -->
         <PackageId>FlintsLabs.D365.ODataClient</PackageId>
-        <Version>1.2.3</Version>
+        <Version>1.2.4</Version>
         <Authors>FlintsLabs</Authors>
         <Company>FlintsLabs</Company>
         <Product>D365 OData Client</Product>
@@ -20,7 +20,7 @@
         <PackageProjectUrl>https://github.com/FlintsLabs/FlintsLabs.D365.ODataClient</PackageProjectUrl>
         <RepositoryUrl>https://github.com/FlintsLabs/FlintsLabs.D365.ODataClient</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
-        <PackageReleaseNotes>v1.2.3: Added support for Microsoft Dataverse (CRM). Improved ADFS auto-detection and authentication logic. Added proper Scope handling and smart Base URL construction.</PackageReleaseNotes>
+        <PackageReleaseNotes>v1.2.4: Documentation updates for NuGet.org to reflect Dataverse support instructions.</PackageReleaseNotes>
         
         <!-- Package settings -->
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
