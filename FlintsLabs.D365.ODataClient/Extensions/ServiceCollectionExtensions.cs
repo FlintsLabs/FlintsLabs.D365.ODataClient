@@ -1,5 +1,6 @@
 using FlintsLabs.D365.ODataClient.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
 
 namespace FlintsLabs.D365.ODataClient.Extensions;
 
@@ -21,20 +22,21 @@ public static class ServiceCollectionExtensions
         // Configure options
         services.Configure(configure);
         
+        // Get options for HttpClient setup
+        var options = new D365ClientOptions();
+        configure(options);
+        
         // Register HTTP client factory with named client
         services.AddHttpClient("D365Endpoint", (serviceProvider, client) =>
         {
-            var options = new D365ClientOptions();
-            configure(options);
-            
-            if (!string.IsNullOrWhiteSpace(options.Resource))
-            {
-                var baseUrl = options.Resource.TrimEnd('/') + "/data/";
-                client.BaseAddress = new Uri(baseUrl);
-            }
+            client.BaseAddress = new Uri(options.GetBaseUrl());
+        }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+        {
+            // Support self-signed certificates for on-premise D365
+            ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true
         });
         
-        // Register token provider as singleton (caches tokens)
+        // Register unified token provider (handles both Azure AD and ADFS)
         services.AddSingleton<ID365AccessTokenProvider, D365AccessTokenProvider>();
         
         // Register D365 service as scoped (one instance per request)
@@ -45,32 +47,59 @@ public static class ServiceCollectionExtensions
     
     /// <summary>
     /// Add D365 OData client services with configuration from IConfiguration section
+    /// Auto-detects Azure AD or ADFS based on TenantId/TokenEndpoint
     /// </summary>
     /// <param name="services">The service collection</param>
-    /// <param name="configurationSection">Configuration section name (default: "D365")</param>
+    /// <param name="configuration">The configuration</param>
+    /// <param name="sectionName">Configuration section name (default: "D365")</param>
     /// <returns>The service collection for chaining</returns>
     public static IServiceCollection AddD365ODataClient(
         this IServiceCollection services,
-        Microsoft.Extensions.Configuration.IConfiguration configuration,
+        IConfiguration configuration,
         string sectionName = "D365")
     {
         var section = configuration.GetSection(sectionName);
         
-        services.Configure<D365ClientOptions>(section);
+        // Configure options with auto-detection
+        services.Configure<D365ClientOptions>(opts =>
+        {
+            opts.ClientId = section["ClientId"];
+            opts.ClientSecret = section["ClientSecret"];
+            opts.TenantId = section["TenantId"];
+            opts.Resource = section["Resource"];
+            opts.OrganizationUrl = section["OrganizationUrl"];
+            opts.TokenEndpoint = section["TokenEndpoint"];
+            opts.GrantType = section["GrantType"] ?? "client_credentials";
+            
+            // Auto-detect ADFS if TenantId is "adfs" or TokenEndpoint is set
+            if (string.Equals(opts.TenantId, "adfs", StringComparison.OrdinalIgnoreCase) 
+                || !string.IsNullOrWhiteSpace(opts.TokenEndpoint))
+            {
+                opts.AuthType = D365AuthType.ADFS;
+            }
+        });
+        
+        // Get values for HttpClient setup
+        var baseUrl = !string.IsNullOrWhiteSpace(section["OrganizationUrl"])
+            ? section["OrganizationUrl"]!.TrimEnd('/') + "/data/"
+            : !string.IsNullOrWhiteSpace(section["Resource"])
+                ? section["Resource"]!.TrimEnd('/') + "/data/"
+                : string.Empty;
         
         // Register HTTP client factory with named client
         services.AddHttpClient("D365Endpoint", (serviceProvider, client) =>
         {
-            var resource = section["Resource"];
-            
-            if (!string.IsNullOrWhiteSpace(resource))
+            if (!string.IsNullOrWhiteSpace(baseUrl))
             {
-                var baseUrl = resource.TrimEnd('/') + "/data/";
                 client.BaseAddress = new Uri(baseUrl);
             }
+        }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+        {
+            // Support self-signed certificates for on-premise D365
+            ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true
         });
         
-        // Register token provider as singleton (caches tokens)
+        // Register unified token provider (handles both Azure AD and ADFS)
         services.AddSingleton<ID365AccessTokenProvider, D365AccessTokenProvider>();
         
         // Register D365 service as scoped (one instance per request)
