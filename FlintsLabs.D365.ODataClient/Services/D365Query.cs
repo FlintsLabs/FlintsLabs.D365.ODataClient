@@ -93,6 +93,14 @@ public class D365Query<T>
         return request;
     }
 
+    /// <summary>
+    /// Get full absolute URL for logging
+    /// </summary>
+    private string GetFullUrl(string relativeUrl)
+    {
+        return $"{_options.GetBaseUrl()}{relativeUrl}";
+    }
+
     #endregion
 
     /// <summary>
@@ -239,7 +247,7 @@ public class D365Query<T>
         }
 
         var baseUrl = $"{_entity}?{string.Join("&", queryParts)}";
-        _logger.LogInformation("Starting query for: {Url}", baseUrl);
+        _logger.LogInformation("D365 GET: {Url}", GetFullUrl(baseUrl));
 
         var records = new List<T>();
         var currentUrl = baseUrl;
@@ -302,7 +310,7 @@ public class D365Query<T>
     public async Task<string> AddAsync(T obj)
     {
         var url = $"{_entity}";
-        _logger.LogInformation("POST {Url}", url);
+        _logger.LogInformation("D365 POST: {Url}", GetFullUrl(url));
 
         var json = JsonSerializer.Serialize(obj, new JsonSerializerOptions
         {
@@ -350,7 +358,7 @@ public class D365Query<T>
             url.Append(_criteria);
         }
 
-        _logger.LogInformation("POST {Url}", url);
+        _logger.LogInformation("D365 POST: {Url}", GetFullUrl(url));
 
         var json = JsonSerializer.Serialize(obj, new JsonSerializerOptions
         {
@@ -397,7 +405,7 @@ public class D365Query<T>
             url.Append(_criteria);
         }
 
-        _logger.LogInformation("POST {Url}", url);
+        _logger.LogInformation("D365 POST: {Url}", GetFullUrl(url));
 
         var json = JsonSerializer.Serialize(obj, new JsonSerializerOptions
         {
@@ -473,7 +481,7 @@ public class D365Query<T>
             url.Append(_criteria);
         }
 
-        _logger.LogInformation("PATCH {Url}", url);
+        _logger.LogInformation("D365 PATCH: {Url}", GetFullUrl(url));
 
         var json = JsonSerializer.Serialize(obj, new JsonSerializerOptions
         {
@@ -546,7 +554,7 @@ public class D365Query<T>
             url.Append(_criteria);
         }
 
-        _logger.LogInformation("PATCH {Url}", url);
+        _logger.LogInformation("D365 PATCH: {Url}", GetFullUrl(url));
 
         var json = JsonSerializer.Serialize(partialObject, new JsonSerializerOptions
         {
@@ -600,7 +608,7 @@ public class D365Query<T>
             url.Append(_criteria);
         }
 
-        _logger.LogInformation("DELETE {Url}", url);
+        _logger.LogInformation("D365 DELETE: {Url}", GetFullUrl(url));
 
         var httpClient = _httpClientFactory.CreateClient(_options.HttpClientName);
         var request = await CreateHttpRequestMessageAsync(HttpMethod.Delete, url.ToString());
@@ -693,7 +701,7 @@ public class D365Query<T>
     {
         try
         {
-            _logger.LogInformation("Fetching data from: {Url}", url);
+            _logger.LogInformation("Fetching: {Url}", GetFullUrl(url));
 
             var httpClient = _httpClientFactory.CreateClient(_options.HttpClientName);
             var request = await CreateHttpRequestMessageAsync(HttpMethod.Get, url);
