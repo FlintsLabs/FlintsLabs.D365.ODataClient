@@ -14,6 +14,22 @@ A fluent OData client for Microsoft Dynamics 365 Finance & Operations.
 - 📦 **CRUD Operations** - Full Create, Read, Update, Delete support
 - 🌐 **Multi-Source** - Connect to multiple D365 instances (F&O, Dataverse) simultaneously
 
+## Table of Contents
+
+- [Installation](#installation)
+- [Configuration](#configuration)
+  - [Option 1: Azure AD (Cloud)](#option-1-azure-ad-cloud-d365)
+  - [Option 2: ADFS (On-Premise)](#option-2-adfs-on-premise-d365)
+  - [Option 3: Dataverse](#option-3-microsoft-dataverse-crm--power-platform)
+  - [Option 4: Multiple Sources](#option-4-multiple-d365-sources-cloud--on-premise)
+- [Usage in ASP.NET Core](#usage-in-aspnet-core)
+  - [Quick Start (Single Source)](#quick-start-single-d365-source)
+  - [Advanced (Multiple Sources)](#advanced-multiple-d365-sources)
+  - [Naming Convention](#naming-convention-summary)
+- [CRUD Operations](#crud-operations)
+- [API Reference](#api-reference)
+- [Requirements](#requirements)
+
 ## Installation
 
 ```bash

@@ -8,7 +8,7 @@
         
         <!-- NuGet Package Info -->
         <PackageId>FlintsLabs.D365.ODataClient</PackageId>
-        <Version>1.2.6</Version>
+        <Version>1.2.7</Version>
         <Authors>FlintsLabs</Authors>
         <Company>FlintsLabs</Company>
         <Product>D365 OData Client</Product>
@@ -20,7 +20,7 @@
         <PackageProjectUrl>https://github.com/FlintsLabs/FlintsLabs.D365.ODataClient</PackageProjectUrl>
         <RepositoryUrl>https://github.com/FlintsLabs/FlintsLabs.D365.ODataClient</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
-        <PackageReleaseNotes>v1.2.6: Improved README with step-by-step usage examples for ASP.NET Core controllers.</PackageReleaseNotes>
+        <PackageReleaseNotes>v1.2.7: Added Table of Contents to README for better navigation.</PackageReleaseNotes>
         
         <!-- Package settings -->
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
