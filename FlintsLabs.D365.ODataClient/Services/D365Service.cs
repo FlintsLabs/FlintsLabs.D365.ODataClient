@@ -103,17 +103,26 @@ public class D365Service : ID365Service
     }
 
     /// <summary>
+    /// Cache for enum entity name lookups (avoids repeated reflection)
+    /// </summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Enum, string> _entityNameCache = new();
+
+    /// <summary>
     /// Extract entity name from user-defined enum.
     /// Priority: [Description] attribute > Enum name
+    /// Uses cache to avoid repeated reflection lookups.
     /// </summary>
     private static string GetEntityNameFromEnum(Enum entity)
     {
-        var field = entity.GetType().GetField(entity.ToString());
-        if (field == null)
-            return entity.ToString();
-        
-        var descAttr = field.GetCustomAttribute<System.ComponentModel.DescriptionAttribute>();
-        return descAttr?.Description ?? entity.ToString();
+        return _entityNameCache.GetOrAdd(entity, e =>
+        {
+            var field = e.GetType().GetField(e.ToString());
+            if (field == null)
+                return e.ToString();
+            
+            var descAttr = field.GetCustomAttribute<System.ComponentModel.DescriptionAttribute>();
+            return descAttr?.Description ?? e.ToString();
+        });
     }
 
     /// <summary>
