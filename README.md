@@ -375,6 +375,19 @@ public class ProductController : ControllerBase
 - ✅ **Refactor-safe** - Rename enum updates all usages
 - ✅ **Documentation** - XML comments on enum members
 
+#### Performance
+
+> [!NOTE]
+> **Internal Caching**: The library automatically caches enum-to-string lookups using `ConcurrentDictionary`.
+> The first call uses reflection, subsequent calls are O(1) dictionary lookups.
+
+| Method | First Call | Subsequent Calls | Type-Safety |
+|--------|------------|------------------|-------------|
+| **String** `.Entity<T>("CustomersV3")` | ⚡ Fast | ⚡ Fast | ❌ |
+| **Enum** `.Entity<T>(D365Entity.Customer)` | 🐢 Reflection | ⚡ Cached | ✅ |
+
+**Recommendation**: Use **Enum** for most cases (type-safety + cached performance). Use **String** only in extremely high-frequency loops where every nanosecond matters.
+
 ---
 
 ### Advanced (Multiple D365 Sources)
