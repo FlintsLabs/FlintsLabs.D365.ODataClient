@@ -286,6 +286,13 @@ builder.Services.AddD365ODataClient("Org1-Cloud", builder.Configuration, "D365Cl
 builder.Services.AddD365ODataClient("Org2-OnPrem", builder.Configuration, "D365OnPrem");
 ```
 
+> [!WARNING]  
+> **Each client must have a unique name!**  
+> Registering the same name twice will throw an `InvalidOperationException` at startup:
+> ```
+> D365 client 'Cloud' is already registered. Use a unique name for each client.
+> ```
+
 **Step 3: Inject `ID365ServiceFactory` in Controller**
 
 ```csharp
