@@ -24,7 +24,18 @@
         <PackageProjectUrl>https://github.com/FlintsLabs/FlintsLabs.D365.ODataClient</PackageProjectUrl>
         <RepositoryUrl>https://github.com/FlintsLabs/FlintsLabs.D365.ODataClient</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
-        <PackageReleaseNotes>v1.2.18: Added ConcurrentDictionary cache for enum entity name lookups (performance optimization).</PackageReleaseNotes>
+        <PackageReleaseNotes>
+v1.2.18: Enum cache optimization (ConcurrentDictionary)
+v1.2.17: Startup config validation (fail fast)
+v1.2.16: Entity(Enum) for type-safe entity names
+v1.2.15: Duplicate registration check
+v1.2.14: List.Contains() support (IN clause)
+v1.2.13: StringBuilder fix + logging docs
+v1.2.12: Request body logging (LogDebug)
+v1.2.11: Full URL logging
+v1.2.10: .NET 10 support
+See CHANGELOG.md for full history.
+        </PackageReleaseNotes>
         
         <!-- Package settings -->
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
