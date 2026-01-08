@@ -85,9 +85,35 @@ public class D365Service : ID365Service
     }
 
     /// <inheritdoc />
+    public D365Service Entity(Enum entity)
+    {
+        return Entity(GetEntityNameFromEnum(entity));
+    }
+
+    /// <inheritdoc />
     public D365Query<T> Entity<T>(string entity)
     {
         return new D365Query<T>(_httpClientFactory, _logger, _accessTokenProvider, entity, _options);
+    }
+
+    /// <inheritdoc />
+    public D365Query<T> Entity<T>(Enum entity)
+    {
+        return Entity<T>(GetEntityNameFromEnum(entity));
+    }
+
+    /// <summary>
+    /// Extract entity name from user-defined enum.
+    /// Priority: [Description] attribute > Enum name
+    /// </summary>
+    private static string GetEntityNameFromEnum(Enum entity)
+    {
+        var field = entity.GetType().GetField(entity.ToString());
+        if (field == null)
+            return entity.ToString();
+        
+        var descAttr = field.GetCustomAttribute<System.ComponentModel.DescriptionAttribute>();
+        return descAttr?.Description ?? entity.ToString();
     }
 
     /// <summary>

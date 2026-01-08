@@ -13,9 +13,36 @@ public interface ID365Service
     D365Service Entity(string entity);
     
     /// <summary>
+    /// Start a query for the specified entity using user-defined enum.
+    /// Uses [Description] attribute if present, otherwise uses enum name.
+    /// </summary>
+    /// <example>
+    /// <code>
+    /// // Define your enum
+    /// public enum MyEntities
+    /// {
+    ///     [Description("CustomersV3")]
+    ///     Customer,
+    ///     
+    ///     LegalEntities  // Uses "LegalEntities" as entity name
+    /// }
+    /// 
+    /// // Usage
+    /// d365.Entity(MyEntities.Customer).ToListAsync();
+    /// </code>
+    /// </example>
+    D365Service Entity(Enum entity);
+    
+    /// <summary>
     /// Start a strongly-typed query for the specified entity
     /// </summary>
     D365Query<T> Entity<T>(string entity);
+    
+    /// <summary>
+    /// Start a strongly-typed query using user-defined enum.
+    /// Uses [Description] attribute if present, otherwise uses enum name.
+    /// </summary>
+    D365Query<T> Entity<T>(Enum entity);
     
     /// <summary>
     /// Add OData filter criteria (raw string)

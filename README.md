@@ -248,6 +248,135 @@ public class ProductsController : ControllerBase
 
 ---
 
+### Type-Safe Entity Names (User-Defined Enum)
+
+Instead of using magic strings for entity names, you can define your own enum for **type-safety** and **IntelliSense support**.
+
+#### Step 1: Define Your Entity Enum
+
+```csharp
+using System.ComponentModel;
+
+namespace MyApp.D365;
+
+/// <summary>
+/// Custom D365 Entity names for type-safe queries.
+/// Use [Description] attribute to map to actual D365 entity name.
+/// If no [Description], the enum member name is used.
+/// </summary>
+public enum D365Entity
+{
+    // CUSTOMERS & VENDORS
+    [Description("CustomersV3")]
+    Customer,
+    
+    [Description("VendorsV2")]
+    Vendor,
+    
+    // PRODUCTS
+    [Description("ReleasedProductsV2")]
+    Product,
+    
+    [Description("InventItemBarcodes")]
+    Barcode,
+    
+    // ORDERS
+    [Description("SalesOrderHeadersV2")]
+    SalesOrderHeader,
+    
+    [Description("SalesOrderLines")]
+    SalesOrderLine,
+    
+    [Description("PurchaseOrderHeadersV2")]
+    PurchaseOrderHeader,
+    
+    // FINANCE
+    [Description("LedgerJournalHeaders")]
+    JournalHeader,
+    
+    // COMMON (no [Description] - uses enum name directly)
+    LegalEntities,
+    Companies,
+    Currencies
+}
+```
+
+#### Step 2: Use Enum in Queries
+
+```csharp
+// BEFORE: Magic string (error-prone)
+var customers = await d365.Entity<Customer>("CustomersV3").ToListAsync();
+
+// AFTER: Type-safe enum (recommended)
+var customers = await d365.Entity<Customer>(D365Entity.Customer).ToListAsync();
+
+// Works with all query methods
+var products = await d365.Entity<Product>(D365Entity.Product)
+    .CrossCompany()
+    .Where(p => p.IsActive == true)
+    .Take(100)
+    .ToListAsync();
+```
+
+#### Resolution Priority
+
+| Priority | Source | Example |
+|----------|--------|---------|
+| 1️⃣ | `[Description("...")]` | `[Description("CustomersV3")]` → `"CustomersV3"` |
+| 2️⃣ | Enum member name | `LegalEntities` → `"LegalEntities"` |
+
+#### Migration Guide (String → Enum)
+
+**Before (v1.2.15 and earlier):**
+```csharp
+public class ProductController : ControllerBase
+{
+    private readonly ID365Service _d365;
+    
+    public async Task<IActionResult> GetProducts()
+    {
+        var products = await _d365.Entity<Product>("ReleasedProductsV2")
+            .CrossCompany()
+            .ToListAsync();
+        return Ok(products);
+    }
+}
+```
+
+**After (v1.2.16+):**
+```csharp
+// 1. Create enum file: Enums/D365Entity.cs
+public enum D365Entity
+{
+    [Description("ReleasedProductsV2")]
+    Product
+}
+
+// 2. Update controller to use enum
+public class ProductController : ControllerBase
+{
+    private readonly ID365Service _d365;
+    
+    public async Task<IActionResult> GetProducts()
+    {
+        var products = await _d365.Entity<Product>(D365Entity.Product)  // <- Changed!
+            .CrossCompany()
+            .ToListAsync();
+        return Ok(products);
+    }
+}
+```
+
+#### Benefits
+
+- ✅ **No typos** - Compiler catches invalid entity names
+- ✅ **IntelliSense** - Auto-complete entity names
+- ✅ **Centralized** - All entity names in one file
+- ✅ **Refactor-safe** - Rename enum updates all usages
+- ✅ **Documentation** - XML comments on enum members
+
+---
+
 ### Advanced (Multiple D365 Sources)
 
 Use this pattern when connecting to **multiple D365 instances** (e.g., Cloud + On-Premise, Production + Sandbox).
