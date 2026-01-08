@@ -282,8 +282,8 @@ builder.Services.AddD365ODataClient(D365ServiceScope.Cloud, builder.Configuratio
 builder.Services.AddD365ODataClient(D365ServiceScope.OnPrem, builder.Configuration, "D365OnPrem");
 
 // Option B: Use custom string names (flexible)
-builder.Services.AddD365ODataClient("BiopharmSandbox", builder.Configuration, "D365Cloud");
-builder.Services.AddD365ODataClient("VCF-Production", builder.Configuration, "D365OnPrem");
+builder.Services.AddD365ODataClient("Org1-Cloud", builder.Configuration, "D365Cloud");
+builder.Services.AddD365ODataClient("Org2-OnPrem", builder.Configuration, "D365OnPrem");
 ```
 
 **Step 3: Inject `ID365ServiceFactory` in Controller**
@@ -447,7 +447,7 @@ All HTTP requests are logged with full URLs. Enable Debug level to see request b
 
 **Example output:**
 ```
-info: D365 GET: https://biopharm.../data/ReleasedProductsV2?cross-company=true&$top=3
+info: D365 GET: https://org1.../data/ReleasedProductsV2?cross-company=true&$top=3
 dbug: Request Body: {"SalesOrderNumber":"SO-001",...}
 ```
 
