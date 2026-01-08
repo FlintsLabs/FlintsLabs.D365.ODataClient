@@ -208,6 +208,35 @@ public class D365ExpressionVisitor : ExpressionVisitor
 
     protected override Expression VisitMethodCall(MethodCallExpression node)
     {
+        // Handle List<T>.Contains(x.Property) or Enumerable.Contains(list, x.Property)
+        // Generates: (property eq 'val1' or property eq 'val2' or ...)
+        if (node.Method.Name == "Contains")
+        {
+            // Case 1: Instance method - list.Contains(x.Property)
+            if (node.Object != null && node.Arguments.Count == 1)
+            {
+                var listValue = GetValueFromExpression(node.Object);
+                var propertyExpr = node.Arguments[0] as MemberExpression;
+                
+                if (listValue is System.Collections.IEnumerable enumerable && propertyExpr != null)
+                {
+                    return BuildInClauseFilter(enumerable, propertyExpr);
+                }
+            }
+            
+            // Case 2: Extension method - Enumerable.Contains(list, x.Property)
+            if (node.Object == null && node.Arguments.Count == 2)
+            {
+                var listValue = GetValueFromExpression(node.Arguments[0]);
+                var propertyExpr = node.Arguments[1] as MemberExpression;
+                
+                if (listValue is System.Collections.IEnumerable enumerable && propertyExpr != null)
+                {
+                    return BuildInClauseFilter(enumerable, propertyExpr);
+                }
+            }
+        }
+        
         // Handle DateTime and other .NET method calls by evaluating the value
         try
         {
@@ -245,6 +274,48 @@ public class D365ExpressionVisitor : ExpressionVisitor
         }
 
         return node;
+    }
+    
+    /// <summary>
+    /// Build OData filter for IN clause: (property eq 'val1' or property eq 'val2' or ...)
+    /// </summary>
+    private Expression BuildInClauseFilter(System.Collections.IEnumerable values, MemberExpression propertyExpr)
+    {
+        var jsonAttr = propertyExpr.Member.GetCustomAttribute<JsonPropertyNameAttribute>();
+        var propName = jsonAttr?.Name ?? propertyExpr.Member.Name;
+        
+        var orParts = new List<string>();
+        foreach (var val in values)
+        {
+            if (val == null) continue;
+            
+            // Format value based on type
+            string formatted = val switch
+            {
+                string s => $"'{s}'",
+                Guid g => g.ToString(),
+                int or long or short or byte => val.ToString()!,
+                decimal or double or float => Convert.ToString(val, CultureInfo.InvariantCulture)!,
+                _ => $"'{val}'"
+            };
+            
+            orParts.Add($"{propName} eq {formatted}");
+        }
+        
+        if (orParts.Count == 0)
+        {
+            _sb.Append("false"); // Empty list = always false
+        }
+        else if (orParts.Count == 1)
+        {
+            _sb.Append(orParts[0]);
+        }
+        else
+        {
+            _sb.Append($"({string.Join(" or ", orParts)})");
+        }
+        
+        return propertyExpr;
     }
 
     private static object? GetValueFromExpression(Expression expr)

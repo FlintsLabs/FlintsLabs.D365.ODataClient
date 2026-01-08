@@ -231,6 +231,18 @@ public class ProductsController : ControllerBase
 
         return Ok(products);
     }
+    
+    // IN clause (multiple values) - auto-generates OR filter
+    [HttpGet("by-codes")]
+    public async Task<IActionResult> GetProductsByCodes([FromQuery] string[] codes)
+    {
+        var products = await _d365.Entity<Product>("ReleasedProductsV2")
+            .CrossCompany()
+            .Where(p => codes.Contains(p.ItemNumber))  // -> (ItemNumber eq 'A001' or ItemNumber eq 'A002' ...)
+            .ToListAsync();
+
+        return Ok(products);
+    }
 }
 ```
 
