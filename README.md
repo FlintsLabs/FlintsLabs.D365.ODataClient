@@ -388,6 +388,36 @@ public class ProductController : ControllerBase
 
 **Recommendation**: Use **Enum** for most cases (type-safety + cached performance). Use **String** only in extremely high-frequency loops where every nanosecond matters.
 
+#### Multiple Enum Types
+
+You can organize entities into **multiple enum types** (e.g., by module). Each enum type is cached separately:
+
+```csharp
+// Sales module entities
+public enum SalesEntity
+{
+    [Description("SalesOrderHeadersV2")]
+    SalesOrder,
+    
+    [Description("SalesOrderLines")]
+    SalesOrderLine
+}
+
+// Purchasing module entities
+public enum PurchaseEntity
+{
+    [Description("PurchaseOrderHeadersV2")]
+    PurchaseOrder
+}
+
+// Usage - both work correctly, no conflicts
+var orders = await d365.Entity<SO>(SalesEntity.SalesOrder).ToListAsync();
+var pos = await d365.Entity<PO>(PurchaseEntity.PurchaseOrder).ToListAsync();
+```
+
+> [!TIP]
+> Adding new enum values or creating new enum types requires no configuration - the library handles caching automatically.
+
 ---
 
 ### Advanced (Multiple D365 Sources)
