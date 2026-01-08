@@ -121,6 +121,10 @@ public class D365ClientBuilder
     {
         var section = configuration.GetSection(sectionName);
         
+        // Check if section has any values
+        if (!section.GetChildren().Any() && section.Value == null)
+            throw new InvalidOperationException($"Configuration section '{sectionName}' not found or is empty. Please add it to your appsettings.json.");
+        
         Options.ClientId = section["ClientId"];
         Options.ClientSecret = section["ClientSecret"];
         Options.TenantId = section["TenantId"];
@@ -129,6 +133,9 @@ public class D365ClientBuilder
         Options.TokenEndpoint = section["TokenEndpoint"];
         Options.GrantType = section["GrantType"] ?? "client_credentials";
         Options.Scope = section["Scope"];
+        
+        // Validate required fields
+        ValidateRequiredFields(sectionName);
         
         // Auto-detect ADFS
         // Logic: If TenantId is explicitly "adfs" OR (TokenEndpoint is present AND TenantId is NOT a GUID)
@@ -143,6 +150,38 @@ public class D365ClientBuilder
         }
         
         return this;
+    }
+    
+    /// <summary>
+    /// Validate required configuration fields
+    /// </summary>
+    private void ValidateRequiredFields(string sectionName)
+    {
+        var errors = new List<string>();
+        
+        if (string.IsNullOrWhiteSpace(Options.ClientId))
+            errors.Add("ClientId");
+        
+        if (string.IsNullOrWhiteSpace(Options.ClientSecret))
+            errors.Add("ClientSecret");
+        
+        // Either Resource or OrganizationUrl is required
+        if (string.IsNullOrWhiteSpace(Options.Resource) && string.IsNullOrWhiteSpace(Options.OrganizationUrl))
+            errors.Add("Resource or OrganizationUrl");
+        
+        // TenantId required for Azure AD (not ADFS)
+        bool hasTokenEndpoint = !string.IsNullOrWhiteSpace(Options.TokenEndpoint);
+        bool isAdfs = string.Equals(Options.TenantId, "adfs", StringComparison.OrdinalIgnoreCase);
+        
+        if (!isAdfs && !hasTokenEndpoint && string.IsNullOrWhiteSpace(Options.TenantId))
+            errors.Add("TenantId");
+        
+        if (errors.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"D365 configuration '{sectionName}' is missing required fields: {string.Join(", ", errors)}. " +
+                $"Please check your appsettings.json.");
+        }
     }
 }
 
