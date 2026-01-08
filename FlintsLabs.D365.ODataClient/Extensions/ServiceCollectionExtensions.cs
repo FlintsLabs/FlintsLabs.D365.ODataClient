@@ -54,6 +54,10 @@ public static class ServiceCollectionExtensions
         var httpClientName = $"D365Endpoint_{name}";
         builder.Options.HttpClientName = httpClientName;
         
+        // Check for duplicate registration
+        if (_registrations.ContainsKey(name))
+            throw new InvalidOperationException($"D365 client '{name}' is already registered. Use a unique name for each client.");
+        
         // Store registration
         _registrations[name] = builder.Options;
         
