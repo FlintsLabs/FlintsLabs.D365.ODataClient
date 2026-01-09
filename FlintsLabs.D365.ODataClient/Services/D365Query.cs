@@ -29,6 +29,13 @@ public class D365Query<T>
     // Identity (used for PATCH / DELETE)
     private readonly Dictionary<string, object?> _identities = new();
 
+    // Cached JsonSerializerOptions for serialization (thread-safe, immutable)
+    private static readonly JsonSerializerOptions DefaultSerializerOptions = new()
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        WriteIndented = false
+    };
+
     // Client-side filtering & paging
     private Expression<Func<T, bool>>? _clientPredicate;
     private int? _takeCount;
@@ -310,11 +317,7 @@ public class D365Query<T>
     public async Task<string> AddAsync(T obj)
     {
         var url = $"{_entity}";
-        var json = JsonSerializer.Serialize(obj, new JsonSerializerOptions
-        {
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-            WriteIndented = false
-        });
+        var json = JsonSerializer.Serialize(obj, DefaultSerializerOptions);
 
         _logger.LogInformation("D365 POST: {Url}", GetFullUrl(url));
         _logger.LogDebug("Request Body: {Body}", json);
@@ -359,11 +362,7 @@ public class D365Query<T>
             url.Append(_criteria);
         }
 
-        var json = JsonSerializer.Serialize(obj, new JsonSerializerOptions
-        {
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-            WriteIndented = false
-        });
+        var json = JsonSerializer.Serialize(obj, DefaultSerializerOptions);
 
         _logger.LogInformation("D365 POST: {Url}", GetFullUrl(url.ToString()));
         _logger.LogDebug("Request Body: {Body}", json);
@@ -407,11 +406,7 @@ public class D365Query<T>
             url.Append(_criteria);
         }
 
-        var json = JsonSerializer.Serialize(obj, new JsonSerializerOptions
-        {
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-            WriteIndented = false
-        });
+        var json = JsonSerializer.Serialize(obj, DefaultSerializerOptions);
 
         _logger.LogInformation("D365 POST: {Url}", GetFullUrl(url.ToString()));
         _logger.LogDebug("Request Body: {Body}", json);
@@ -484,11 +479,7 @@ public class D365Query<T>
             url.Append(_criteria);
         }
 
-        var json = JsonSerializer.Serialize(obj, new JsonSerializerOptions
-        {
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-            WriteIndented = false
-        });
+        var json = JsonSerializer.Serialize(obj, DefaultSerializerOptions);
 
         _logger.LogInformation("D365 PATCH: {Url}", GetFullUrl(url.ToString()));
         _logger.LogDebug("Request Body: {Body}", json);
@@ -558,11 +549,7 @@ public class D365Query<T>
             url.Append(_criteria);
         }
 
-        var json = JsonSerializer.Serialize(partialObject, new JsonSerializerOptions
-        {
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-            WriteIndented = false
-        });
+        var json = JsonSerializer.Serialize(partialObject, DefaultSerializerOptions);
 
         _logger.LogInformation("D365 PATCH: {Url}", GetFullUrl(url.ToString()));
         _logger.LogDebug("Request Body: {Body}", json);
