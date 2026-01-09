@@ -2,6 +2,7 @@ using FlintsLabs.D365.ODataClient.Enums;
 using FlintsLabs.D365.ODataClient.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
+using System.Collections.Concurrent;
 
 namespace FlintsLabs.D365.ODataClient.Extensions;
 
@@ -10,8 +11,8 @@ namespace FlintsLabs.D365.ODataClient.Extensions;
 /// </summary>
 public static class ServiceCollectionExtensions
 {
-    // Store registrations for factory
-    private static readonly Dictionary<string, D365ClientOptions> _registrations = new();
+    // Store registrations for factory (thread-safe)
+    private static readonly ConcurrentDictionary<string, D365ClientOptions> _registrations = new();
     
     /// <summary>
     /// Add named D365 OData client service with fluent configuration
@@ -54,12 +55,9 @@ public static class ServiceCollectionExtensions
         var httpClientName = $"D365Endpoint_{name}";
         builder.Options.HttpClientName = httpClientName;
         
-        // Check for duplicate registration
-        if (_registrations.ContainsKey(name))
+        // Check for duplicate registration (thread-safe)
+        if (!_registrations.TryAdd(name, builder.Options))
             throw new InvalidOperationException($"D365 client '{name}' is already registered. Use a unique name for each client.");
-        
-        // Store registration
-        _registrations[name] = builder.Options;
         
         // Register HttpClient for this instance
         services.AddHttpClient($"D365Endpoint_{name}", client =>
