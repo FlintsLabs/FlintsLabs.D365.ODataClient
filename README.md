@@ -123,7 +123,8 @@ builder.Services.AddD365ODataClient(builder.Configuration, "D365OnPrem");
          .WithClientSecret("your-client-secret")
          .WithTenantId("your-tenant-id")
          .WithResource("https://org.api.crm5.dynamics.com")
-         .WithScope("https://org.api.crm5.dynamics.com/.default"); // Optional explicit scope
+         .WithOrganizationUrl("https://org.api.crm5.dynamics.com/api/data/v9.2/")
+         .WithScope("https://org.api.crm5.dynamics.com/.default");
  });
  ```
  
@@ -135,7 +136,8 @@ builder.Services.AddD365ODataClient(builder.Configuration, "D365OnPrem");
      "ClientSecret": "your-client-secret",
      "TenantId": "your-tenant-id",
      "Resource": "https://org.api.crm5.dynamics.com",
-     "TokenEndpoint": "https://login.microsoftonline.com/..." // Optional
+     "OrganizationUrl": "https://org.api.crm5.dynamics.com/api/data/v9.2/",
+     "Scope": "https://org.api.crm5.dynamics.com/.default"
    }
  }
  ```
@@ -147,6 +149,13 @@ builder.Services.AddD365ODataClient(builder.Configuration, "D365OnPrem");
      builder.Configuration, 
      "DataverseConfigs");
  ```
+
+> [!IMPORTANT]
+> **Dataverse requires both `Resource` and `OrganizationUrl`:**
+> - **Resource** = Used for authentication token (base domain only)
+> - **OrganizationUrl** = Used as API base URL (includes `/api/data/v9.2/`)
+> 
+> If omitted, the library uses `Resource` + `/data/` which is incorrect for Dataverse.
  
  ---
 
