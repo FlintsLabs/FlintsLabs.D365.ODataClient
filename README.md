@@ -572,7 +572,11 @@ await _d365.Entity<Customer>("CustomersV3")
 | `CrossCompany()` | Enable cross-company query |
 | `Where(Expression<Func<T, bool>>)` | Filter using LINQ expression |
 | `Select(Expression<Func<T, object>>)` | Select specific properties |
-| `OrderBy(string property)` | Sort ascending |
+| `OrderBy(x => x.Property)` | Sort ascending using LINQ expression |
+| `OrderByDescending(x => x.Property)` | Sort descending using LINQ expression |
+| `ThenBy(x => x.Property)` | Secondary sort ascending |
+| `ThenByDescending(x => x.Property)` | Secondary sort descending |
+| `OrderBy(string property, bool asc)` | Sort by property name (legacy) |
 | `Skip(int count)` | Skip N records |
 | `Take(int count)` | Take N records |
 | `AddIdentity(string key, object value)` | Add entity key for updates |

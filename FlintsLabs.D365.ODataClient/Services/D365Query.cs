@@ -202,6 +202,54 @@ public class D365Query<T>
     }
 
     /// <summary>
+    /// Order by property using LINQ expression (ascending)
+    /// </summary>
+    /// <typeparam name="TKey">Property type</typeparam>
+    /// <param name="keySelector">Property selector expression</param>
+    public D365Query<T> OrderBy<TKey>(Expression<Func<T, TKey>> keySelector)
+    {
+        var propertyName = D365ExpressionHelper.GetPropertyName(keySelector);
+        AppendOrderBy(propertyName, "asc");
+        return this;
+    }
+
+    /// <summary>
+    /// Order by property using LINQ expression (descending)
+    /// </summary>
+    /// <typeparam name="TKey">Property type</typeparam>
+    /// <param name="keySelector">Property selector expression</param>
+    public D365Query<T> OrderByDescending<TKey>(Expression<Func<T, TKey>> keySelector)
+    {
+        var propertyName = D365ExpressionHelper.GetPropertyName(keySelector);
+        AppendOrderBy(propertyName, "desc");
+        return this;
+    }
+
+    /// <summary>
+    /// Then order by property using LINQ expression (ascending) for secondary sorting
+    /// </summary>
+    /// <typeparam name="TKey">Property type</typeparam>
+    /// <param name="keySelector">Property selector expression</param>
+    public D365Query<T> ThenBy<TKey>(Expression<Func<T, TKey>> keySelector)
+    {
+        var propertyName = D365ExpressionHelper.GetPropertyName(keySelector);
+        AppendThenBy(propertyName, "asc");
+        return this;
+    }
+
+    /// <summary>
+    /// Then order by property using LINQ expression (descending) for secondary sorting
+    /// </summary>
+    /// <typeparam name="TKey">Property type</typeparam>
+    /// <param name="keySelector">Property selector expression</param>
+    public D365Query<T> ThenByDescending<TKey>(Expression<Func<T, TKey>> keySelector)
+    {
+        var propertyName = D365ExpressionHelper.GetPropertyName(keySelector);
+        AppendThenBy(propertyName, "desc");
+        return this;
+    }
+
+    /// <summary>
     /// Expand navigation property with select
     /// </summary>
     public D365Query<T> Expand<TExpand>(
@@ -755,6 +803,47 @@ public class D365Query<T>
         }
 
         return -1;
+    }
+
+    private void AppendOrderBy(string property, string direction)
+    {
+        var orderByClause = $"$orderby={property} {direction}";
+        
+        // Check if $orderby already exists
+        var existingIndex = _criteria.IndexOf("$orderby=", StringComparison.OrdinalIgnoreCase);
+        if (existingIndex >= 0)
+        {
+            // Replace existing $orderby with new one (OrderBy resets the sort)
+            var existingEndIndex = _criteria.IndexOf('&', existingIndex);
+            _criteria = existingEndIndex >= 0
+                ? _criteria[..existingIndex] + orderByClause + _criteria[existingEndIndex..]
+                : _criteria[..existingIndex] + orderByClause;
+        }
+        else
+        {
+            AppendCriteria(orderByClause);
+        }
+    }
+
+    private void AppendThenBy(string property, string direction)
+    {
+        // Check if $orderby already exists
+        var existingIndex = _criteria.IndexOf("$orderby=", StringComparison.OrdinalIgnoreCase);
+        if (existingIndex >= 0)
+        {
+            // Find end of existing $orderby
+            var existingEndIndex = _criteria.IndexOf('&', existingIndex);
+            var insertPosition = existingEndIndex >= 0 ? existingEndIndex : _criteria.Length;
+            
+            // Append to existing $orderby with comma separator
+            var appendPart = $",{property} {direction}";
+            _criteria = _criteria.Insert(insertPosition, appendPart);
+        }
+        else
+        {
+            // No existing $orderby, treat as primary OrderBy
+            AppendOrderBy(property, direction);
+        }
     }
 
     private void AppendCriteria(string part)

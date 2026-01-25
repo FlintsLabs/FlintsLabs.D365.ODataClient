@@ -12,7 +12,7 @@
         
         <!-- NuGet Package Info -->
         <PackageId>FlintsLabs.D365.ODataClient</PackageId>
-        <Version>1.2.20</Version>
+        <Version>1.2.21</Version>
         <Authors>FlintsLabs</Authors>
         <Company>FlintsLabs</Company>
         <Product>D365 OData Client</Product>
@@ -25,6 +25,7 @@
         <RepositoryUrl>https://github.com/FlintsLabs/FlintsLabs.D365.ODataClient</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
         <PackageReleaseNotes>
+v1.2.21: LINQ OrderBy support (OrderBy, OrderByDescending, ThenBy, ThenByDescending)
 v1.2.20: Cached JsonSerializerOptions (reduces allocations)
 v1.2.19: Thread-safe registration (ConcurrentDictionary)
 v1.2.18: Enum cache optimization (ConcurrentDictionary)
@@ -35,7 +36,6 @@ v1.2.14: List.Contains() support (IN clause)
 v1.2.13: StringBuilder fix + logging docs
 v1.2.12: Request body logging (LogDebug)
 v1.2.11: Full URL logging
-v1.2.10: .NET 10 support
 See CHANGELOG.md for full history.
         </PackageReleaseNotes>
         
