@@ -174,6 +174,7 @@ builder.Services.AddD365ODataClient(builder.Configuration, "D365OnPrem");
  > |------------|-------------------|-------------------|-------------------|
  > | `x.Prop.GetValueOrDefault()` | `false` (Excludes) | `false` (Excludes) | `true` (Includes) |
  > | `!x.Prop.GetValueOrDefault()` | `true` (Includes) | `true` (Includes) | `false` (Excludes) |
+ > | `x.Prop == false` | `false` (Excludes) | `true` (Includes) | `false` (Excludes) |
  > 
  > *Note: `null` treats as `false`*
 
