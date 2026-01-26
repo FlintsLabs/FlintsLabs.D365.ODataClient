@@ -166,6 +166,18 @@ builder.Services.AddD365ODataClient(builder.Configuration, "D365OnPrem");
  > Dataverse uses standard `true`/`false` for booleans, while D365 F&O uses `NoYes` enum.
  > Use `WithBooleanFormatting(D365BooleanFormatting.Literal)` or set `"BooleanFormatting": "Literal"` in config for Dataverse.
  
+ > [!NOTE]
+ > **Nullable Booleans (`bool?`):**
+ > When using `GetValueOrDefault()`, the library translates it to check against `true`.
+ > 
+ > | Expression | C# Value (`null`) | C# Value (`false`) | C# Value (`true`) |
+ > |------------|-------------------|-------------------|-------------------|
+ > | `x.Prop.GetValueOrDefault()` | `false` (Excludes) | `false` (Excludes) | `true` (Includes) |
+ > | `!x.Prop.GetValueOrDefault()` | `true` (Includes) | `true` (Includes) | `false` (Excludes) |
+ > 
+ > *Note: `null` treats as `false`*
+
+ 
  ---
 
 ### Option 4: Multiple D365 Sources (Cloud + On-Premise)
