@@ -138,4 +138,53 @@ public class BooleanTests
            ItExpr.IsAny<CancellationToken>()
         );
     }
+
+    [Fact]
+    public async Task Where_NullableBool_Equals_False_ShouldWork()
+    {
+         // Arrange
+        var handlerMock = new Mock<HttpMessageHandler>();
+        handlerMock.Protected()
+           .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+           .ReturnsAsync(new HttpResponseMessage { StatusCode = HttpStatusCode.OK, Content = new StringContent("{\"value\": []}") });
+
+        var httpClient = new HttpClient(handlerMock.Object) { BaseAddress = new Uri("https://example.com/data/") };
+        var httpClientFactoryMock = new Mock<IHttpClientFactory>();
+        httpClientFactoryMock.Setup(x => x.CreateClient(It.IsAny<string>())).Returns(httpClient);
+
+        var options = new D365ClientOptions { Resource = "https://example.com" }; // Default config (NoYes)
+
+        var query = new D365Query<TestEntity>(
+            httpClientFactoryMock.Object,
+            Mock.Of<ILogger>(),
+            Mock.Of<ID365AccessTokenProvider>(),
+            "TestEntities",
+            options
+        );
+
+        // Act
+        // Case: x.IsPublished == false
+        // This should filter ONLY false values (excluding null)
+        query.Where(x => x.IsPublished == false);
+        await query.ToListAsync();
+
+        // Assert
+        handlerMock.Protected().Verify(
+           "SendAsync",
+           Times.Once(),
+           ItExpr.Is<HttpRequestMessage>(req =>
+              req.RequestUri!.ToString().Contains("IsPublished eq Microsoft.Dynamics.DataEntities.NoYes'No'")
+           ),
+           ItExpr.IsAny<CancellationToken>()
+        );
+    }
+
+    /*
+    [Fact]
+    public async Task Where_Invalid_Syntax_Test()
+    {
+        // This should fail to compile if IsPublished is nullable
+        // query.Where(x => !x.IsPublished == false); 
+    }
+    */
 }
