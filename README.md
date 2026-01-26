@@ -126,7 +126,8 @@ builder.Services.AddD365ODataClient(builder.Configuration, "D365OnPrem");
          .WithTenantId("your-tenant-id")
          .WithResource("https://org.api.crm5.dynamics.com")
          .WithOrganizationUrl("https://org.api.crm5.dynamics.com/api/data/v9.2/")
-         .WithScope("https://org.api.crm5.dynamics.com/.default");
+         .WithScope("https://org.api.crm5.dynamics.com/.default")
+         .WithBooleanFormatting(D365BooleanFormatting.Literal);
  });
  ```
  
