@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.24] - 2026-01-26
+### Fixed
+- Issue where `!x.Prop.GetValueOrDefault()` generated invalid filter (`$filter=null`)
+- Correctly translates `GetValueOrDefault()` to `(Prop eq true)`
+- Correctly handles Unary `Not` expression (`!`)
+
 ## [1.2.23] - 2026-01-26
 ### Added
 - Configurable Boolean Formatting: `NoYes` (default) or `Literal` (true/false)

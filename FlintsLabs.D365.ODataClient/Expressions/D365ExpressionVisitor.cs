@@ -111,6 +111,14 @@ public class D365ExpressionVisitor : ExpressionVisitor
 
     protected override Expression VisitUnary(UnaryExpression node)
     {
+        if (node.NodeType == ExpressionType.Not)
+        {
+            _sb.Append("not (");
+            Visit(node.Operand);
+            _sb.Append(")");
+            return node;
+        }
+
         Visit(node.Operand);
         return node;
     }
@@ -255,6 +263,25 @@ public class D365ExpressionVisitor : ExpressionVisitor
         {
             var instance = node.Object is MemberExpression objMember ? GetValue(objMember) : null;
             var args = node.Arguments.Select(GetValueFromExpression).ToArray();
+
+            // Handle GetValueOrDefault() for nullable booleans
+            if (node.Method.Name == "GetValueOrDefault" && node.Object is MemberExpression me && 
+                (me.Type == typeof(bool?) || me.Type == typeof(bool)))
+            {
+                // Translate as: (Property eq true)
+                // This correctly handles "true" case.
+                _sb.Append("(");
+                Visit(me);
+                _sb.Append(" eq ");
+                
+                if (_booleanFormatting == D365BooleanFormatting.Literal)
+                    _sb.Append("true");
+                else
+                    _sb.Append(D365NoYes.Yes);
+                    
+                _sb.Append(")");
+                return node;
+            }
 
             var result = node.Method.Invoke(instance, args);
             AppendConstant(result);
