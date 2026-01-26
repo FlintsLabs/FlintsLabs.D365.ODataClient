@@ -143,7 +143,18 @@ public class D365ClientBuilder
         Options.OrganizationUrl = section["OrganizationUrl"];
         Options.TokenEndpoint = section["TokenEndpoint"];
         Options.GrantType = section["GrantType"] ?? "client_credentials";
+
         Options.Scope = section["Scope"];
+        
+        // Boolean Formatting
+        if (Enum.TryParse<D365BooleanFormatting>(section["BooleanFormatting"], true, out var boolFmt))
+        {
+            Options.BooleanFormatting = boolFmt;
+        }
+        else
+        {
+            Options.BooleanFormatting = D365BooleanFormatting.NoYesEnum; // Default
+        }
         
         // Validate required fields
         ValidateRequiredFields(sectionName);

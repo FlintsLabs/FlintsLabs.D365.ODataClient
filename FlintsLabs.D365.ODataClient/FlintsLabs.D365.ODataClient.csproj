@@ -12,7 +12,7 @@
         
         <!-- NuGet Package Info -->
         <PackageId>FlintsLabs.D365.ODataClient</PackageId>
-        <Version>1.2.24</Version>
+        <Version>1.2.25</Version>
         <Authors>FlintsLabs</Authors>
         <Company>FlintsLabs</Company>
         <Product>D365 OData Client</Product>
@@ -25,6 +25,7 @@
         <RepositoryUrl>https://github.com/FlintsLabs/FlintsLabs.D365.ODataClient</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
         <PackageReleaseNotes>
+v1.2.25: Fixed BooleanFormatting config ignored in appsettings.json.
 v1.2.24: Fix !Prop.GetValueOrDefault() generation ($filter=null).
 v1.2.23: Configurable Boolean Formatting (NoYes vs Literal) for Dataverse support
 v1.2.22: Expand improvements, Header support, and Logging. Fixed Expand(x=>x).
