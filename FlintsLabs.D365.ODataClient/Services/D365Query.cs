@@ -97,6 +97,12 @@ public class D365Query<T>
             request.Headers.TryAddWithoutValidation(header.Key, header.Value);
         }
 
+        _logger.LogInformation("Sending D365 Request: {Method} {Url}", method, url);
+        foreach (var header in request.Headers)
+        {
+            _logger.LogInformation("Header: {Key}={Value}", header.Key, string.Join(",", header.Value));
+        }
+
         return request;
     }
 
@@ -260,6 +266,24 @@ public class D365Query<T>
         var selectCols = D365ExpressionHelper.GetPropertyNamesFromExpression(typeof(TExpand), select);
         AppendCriteria($"$expand={navName}($select={string.Join(',', selectCols)})");
         return this;
+    }
+
+    /// <summary>
+    /// Expand navigation property
+    /// </summary>
+    public D365Query<T> Expand(string navigationName)
+    {
+        AppendCriteria($"$expand={navigationName}");
+        return this;
+    }
+
+    /// <summary>
+    /// Expand navigation property using LINQ expression
+    /// </summary>
+    public D365Query<T> Expand(Expression<Func<T, object>> navigation)
+    {
+        var navName = D365ExpressionHelper.GetPropertyName(navigation);
+        return Expand(navName);
     }
 
     /// <summary>

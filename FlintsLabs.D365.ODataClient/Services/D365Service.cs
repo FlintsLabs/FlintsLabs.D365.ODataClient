@@ -73,6 +73,12 @@ public class D365Service : ID365Service
             request.Headers.TryAddWithoutValidation(header.Key, header.Value);
         }
 
+        _logger.LogInformation("Sending D365 Request: {Method} {Url}", method, url);
+        foreach (var header in request.Headers)
+        {
+            _logger.LogInformation("Header: {Key}={Value}", header.Key, string.Join(",", header.Value));
+        }
+
         return request;
     }
 

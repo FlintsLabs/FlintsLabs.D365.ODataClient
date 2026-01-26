@@ -12,6 +12,8 @@ A fluent OData client for Microsoft Dynamics 365 Finance & Operations.
 
 - 🔗 **Fluent API** - Chainable query builder with IntelliSense support
 - 🔍 **LINQ Support** - Write queries using lambda expressions
+- ➕ **Expand Support** - Easily expand navigation properties (`query.Expand("Nav")` or `query.Expand(x => x.Nav)`)
+- 📨 **Custom Headers** - Add custom headers like `Prefer` to requests
 - 🏢 **Cross-Company** - Query across legal entities
 - 🔐 **Multi-Auth Support** - Azure AD (Cloud), ADFS (On-Premise), and **Dataverse**
 - 📦 **CRUD Operations** - Full Create, Read, Update, Delete support
@@ -581,6 +583,9 @@ await _d365.Entity<Customer>("CustomersV3")
 | `Take(int count)` | Take N records |
 | `AddIdentity(string key, object value)` | Add entity key for updates |
 | `PageSize(int size)` | Set page size for pagination |
+| `Expand(string nav)` | Expand navigation property |
+| `Expand(Expression<Func<T, object>>)` | Expand navigation property (lambda) |
+| `AddHeader(string key, string value)` | Add custom request header |
 
 ### Execute Methods
 

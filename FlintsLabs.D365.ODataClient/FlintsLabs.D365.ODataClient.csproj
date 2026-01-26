@@ -12,7 +12,7 @@
         
         <!-- NuGet Package Info -->
         <PackageId>FlintsLabs.D365.ODataClient</PackageId>
-        <Version>1.2.21</Version>
+        <Version>1.2.22</Version>
         <Authors>FlintsLabs</Authors>
         <Company>FlintsLabs</Company>
         <Product>D365 OData Client</Product>
@@ -25,6 +25,7 @@
         <RepositoryUrl>https://github.com/FlintsLabs/FlintsLabs.D365.ODataClient</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
         <PackageReleaseNotes>
+v1.2.22: Expand improvements, Header support, and Logging. Fixed Expand(x=>x).
 v1.2.21: LINQ OrderBy support (OrderBy, OrderByDescending, ThenBy, ThenByDescending)
 v1.2.20: Cached JsonSerializerOptions (reduces allocations)
 v1.2.19: Thread-safe registration (ConcurrentDictionary)

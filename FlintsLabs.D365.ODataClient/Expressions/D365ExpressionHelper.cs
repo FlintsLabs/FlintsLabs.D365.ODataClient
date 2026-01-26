@@ -47,6 +47,9 @@ public static class D365ExpressionHelper
         if (body is MemberExpression single)
             return new[] { GetJsonName(single.Member) };
 
+        if (body is ParameterExpression)
+            return new[] { "*" };
+
         throw new NotSupportedException($"Unsupported expression type: {expression.Body.NodeType}");
     }
 
