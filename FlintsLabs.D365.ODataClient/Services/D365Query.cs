@@ -139,7 +139,7 @@ public class D365Query<T>
     /// </summary>
     public D365Query<T> Where(Expression<Func<T, bool>> predicate)
     {
-        var visitor = new D365ExpressionVisitor();
+        var visitor = new D365ExpressionVisitor(_options.BooleanFormatting);
         var filter = visitor.Translate(predicate.Body);
         AppendCriteria($"$filter={filter}");
         return this;

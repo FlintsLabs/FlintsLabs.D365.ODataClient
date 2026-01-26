@@ -1,5 +1,7 @@
 namespace FlintsLabs.D365.ODataClient.Extensions;
 
+using FlintsLabs.D365.ODataClient.Enums;
+
 /// <summary>
 /// Authentication type for D365
 /// </summary>
@@ -115,6 +117,15 @@ public class D365ClientBuilder
     }
     
     /// <summary>
+    /// Set Boolean Formatting Strategy
+    /// </summary>
+    public D365ClientBuilder WithBooleanFormatting(D365BooleanFormatting formatting)
+    {
+        Options.BooleanFormatting = formatting;
+        return this;
+    }
+    
+    /// <summary>
     /// Configure from IConfiguration section
     /// </summary>
     public D365ClientBuilder FromConfiguration(Microsoft.Extensions.Configuration.IConfiguration configuration, string sectionName = "D365")
@@ -195,6 +206,13 @@ public class D365ClientOptions
     /// Default: AzureAD
     /// </summary>
     public D365AuthType AuthType { get; set; } = D365AuthType.AzureAD;
+    
+    /// <summary>
+    /// Boolean Formatting Strategy (NoYesEnum vs Literal)
+    /// Default: NoYesEnum (Standard F&O)
+    /// </summary>
+    public D365BooleanFormatting BooleanFormatting { get; set; } = D365BooleanFormatting.NoYesEnum;
+
      
      /// <summary>
      /// Custom Scope (optional). If not set, uses Resource + "/.default"

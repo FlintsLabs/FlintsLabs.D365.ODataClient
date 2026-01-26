@@ -139,7 +139,8 @@ builder.Services.AddD365ODataClient(builder.Configuration, "D365OnPrem");
      "TenantId": "your-tenant-id",
      "Resource": "https://org.api.crm5.dynamics.com",
      "OrganizationUrl": "https://org.api.crm5.dynamics.com/api/data/v9.2/",
-     "Scope": "https://org.api.crm5.dynamics.com/.default"
+     "Scope": "https://org.api.crm5.dynamics.com/.default",
+     "BooleanFormatting": "Literal"
    }
  }
  ```
@@ -158,6 +159,11 @@ builder.Services.AddD365ODataClient(builder.Configuration, "D365OnPrem");
 > - **OrganizationUrl** = Used as API base URL (includes `/api/data/v9.2/`)
 > 
 > If omitted, the library uses `Resource` + `/data/` which is incorrect for Dataverse.
+ 
+ > [!TIP]
+ > **Boolean Formatting:**
+ > Dataverse uses standard `true`/`false` for booleans, while D365 F&O uses `NoYes` enum.
+ > Use `WithBooleanFormatting(D365BooleanFormatting.Literal)` or set `"BooleanFormatting": "Literal"` in config for Dataverse.
  
  ---
 

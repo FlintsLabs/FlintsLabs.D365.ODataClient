@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.23] - 2026-01-26
+### Added
+- Configurable Boolean Formatting: `NoYes` (default) or `Literal` (true/false)
+- Support for Dataverse/CRM boolean filtering style via `WithBooleanFormatting(D365BooleanFormatting.Literal)`
+
 ## [1.2.22] - 2026-01-26
 ### Added
 - `Expand(string)` and `Expand(Expression)` overloads for simple extensions

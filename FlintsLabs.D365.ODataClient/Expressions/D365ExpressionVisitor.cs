@@ -13,6 +13,12 @@ namespace FlintsLabs.D365.ODataClient.Expressions;
 public class D365ExpressionVisitor : ExpressionVisitor
 {
     private readonly StringBuilder _sb = new();
+    private readonly D365BooleanFormatting _booleanFormatting;
+
+    public D365ExpressionVisitor(D365BooleanFormatting booleanFormatting = D365BooleanFormatting.NoYesEnum)
+    {
+        _booleanFormatting = booleanFormatting;
+    }
 
     /// <summary>
     /// Translate expression to OData filter string
@@ -132,9 +138,16 @@ public class D365ExpressionVisitor : ExpressionVisitor
                 _sb.Append('\'').Append(s.Replace("'", "''")).Append('\'');
                 break;
 
-            // Boolean (D365 NoYes enum)
+            // Boolean
             case bool b:
-                _sb.Append(b ? D365NoYes.Yes : D365NoYes.No);
+                if (_booleanFormatting == D365BooleanFormatting.Literal)
+                {
+                    _sb.Append(b ? "true" : "false");
+                }
+                else
+                {
+                    _sb.Append(b ? D365NoYes.Yes : D365NoYes.No);
+                }
                 break;
 
             // DateTime -> ISO8601 UTC
