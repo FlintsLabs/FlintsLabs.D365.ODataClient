@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Threading;
 using FlintsLabs.D365.ODataClient.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -14,6 +15,7 @@ public class D365AccessTokenProvider : ID365AccessTokenProvider
 {
     private readonly ILogger<D365AccessTokenProvider> _logger;
     private readonly D365ClientOptions _options;
+    private readonly SemaphoreSlim _tokenLock = new(1, 1);
     private string? _accessToken;
     private DateTime? _expiresOn;
 
@@ -31,19 +33,39 @@ public class D365AccessTokenProvider : ID365AccessTokenProvider
     /// </summary>
     public async Task<string> GetAccessTokenAsync()
     {
-        // Check if token is still valid (with 5 min buffer)
-        if (!string.IsNullOrWhiteSpace(_accessToken) && _expiresOn.HasValue && DateTime.UtcNow.AddMinutes(5) < _expiresOn)
+        if (IsTokenValid())
         {
             _logger.LogDebug("Access token is still valid, using cached token");
-            return _accessToken;
+            return _accessToken!;
         }
 
-        // Route to appropriate auth method
-        return _options.AuthType switch
+        await _tokenLock.WaitAsync().ConfigureAwait(false);
+        try
         {
-            D365AuthType.ADFS => await GetAdfsTokenAsync(),
-            _ => await GetAzureAdTokenAsync()
-        };
+            if (IsTokenValid())
+            {
+                _logger.LogDebug("Access token refreshed by another caller, using cached token");
+                return _accessToken!;
+            }
+
+            // Route to appropriate auth method
+            return _options.AuthType switch
+            {
+                D365AuthType.ADFS => await GetAdfsTokenAsync(),
+                _ => await GetAzureAdTokenAsync()
+            };
+        }
+        finally
+        {
+            _tokenLock.Release();
+        }
+    }
+
+    private bool IsTokenValid()
+    {
+        return !string.IsNullOrWhiteSpace(_accessToken) &&
+               _expiresOn.HasValue &&
+               DateTime.UtcNow.AddMinutes(5) < _expiresOn;
     }
 
     /// <summary>

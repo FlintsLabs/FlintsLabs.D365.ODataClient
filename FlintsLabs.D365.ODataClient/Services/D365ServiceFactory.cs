@@ -1,6 +1,8 @@
 using FlintsLabs.D365.ODataClient.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using System.Collections.Concurrent;
+using Microsoft.Extensions.Options;
 
 namespace FlintsLabs.D365.ODataClient.Services;
 
@@ -29,6 +31,7 @@ public class D365ServiceFactory : ID365ServiceFactory
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly Dictionary<string, D365ClientOptions> _registrations;
+    private readonly ConcurrentDictionary<string, ID365AccessTokenProvider> _tokenProviders = new();
 
     public D365ServiceFactory(
         IServiceProvider serviceProvider,
@@ -48,16 +51,17 @@ public class D365ServiceFactory : ID365ServiceFactory
         // Create scoped service with specific options
         var httpClientFactory = _serviceProvider.GetRequiredService<IHttpClientFactory>();
         var loggerFactory = _serviceProvider.GetRequiredService<Microsoft.Extensions.Logging.ILoggerFactory>();
-        
-        var tokenProvider = new D365AccessTokenProvider(
-            loggerFactory.CreateLogger<D365AccessTokenProvider>(),
-            Microsoft.Extensions.Options.Options.Create(options));
+
+        var tokenProvider = _tokenProviders.GetOrAdd(name, _ =>
+            new D365AccessTokenProvider(
+                loggerFactory.CreateLogger<D365AccessTokenProvider>(),
+                Options.Create(options)));
         
         var service = new D365Service(
             httpClientFactory,
             loggerFactory.CreateLogger<D365Service>(),
             tokenProvider,
-            Microsoft.Extensions.Options.Options.Create(options));
+            Options.Create(options));
         
         return service;
     }
