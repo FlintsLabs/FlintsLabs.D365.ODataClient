@@ -76,10 +76,20 @@ public class D365Service : ID365Service
         _logger.LogInformation("Sending D365 Request: {Method} {Url}", method, url);
         foreach (var header in request.Headers)
         {
-            _logger.LogInformation("Header: {Key}={Value}", header.Key, string.Join(",", header.Value));
+            _logger.LogDebug("Header: {Key}={Value}", header.Key, MaskHeaderValue(header.Key, header.Value));
         }
 
         return request;
+    }
+
+    private static string MaskHeaderValue(string key, IEnumerable<string> values)
+    {
+        if (string.Equals(key, "Authorization", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Bearer ***";
+        }
+
+        return string.Join(",", values);
     }
 
     /// <inheritdoc />
@@ -359,7 +369,7 @@ public class D365Service : ID365Service
     private async Task<List<T>> GetListDataAsync<T>()
     {
         var currentUrl = $"{_entity}/{_criteria}";
-        _logger.LogInformation("GetListDataAsync starting with: {Url}", currentUrl);
+        _logger.LogDebug("GetListDataAsync starting with: {Url}", currentUrl);
 
         List<T> records = [];
 
@@ -369,7 +379,7 @@ public class D365Service : ID365Service
 
             var record = DeserializeJsonContent<T>(responseString);
             records.AddRange(record);
-            _logger.LogInformation("Fetched {Count} records", record.Count);
+            _logger.LogDebug("Fetched {Count} records", record.Count);
 
             currentUrl = nextUrl;
         }
@@ -379,7 +389,7 @@ public class D365Service : ID365Service
 
     private async Task<(string NextUrl, string jsonResult)> GetResponseStringAsync(string url)
     {
-        _logger.LogInformation("Fetching data from: {Url}", url);
+        _logger.LogDebug("Fetching data from: {Url}", url);
 
         var httpClient = _httpClientFactory.CreateClient(_options.HttpClientName);
         var request = await CreateHttpRequestMessageAsync(HttpMethod.Get, url);

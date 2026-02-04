@@ -107,7 +107,7 @@ public class D365Query<T>
         _logger.LogInformation("Sending D365 Request: {Method} {Url}", method, url);
         foreach (var header in request.Headers)
         {
-            _logger.LogInformation("Header: {Key}={Value}", header.Key, string.Join(",", header.Value));
+            _logger.LogDebug("Header: {Key}={Value}", header.Key, MaskHeaderValue(header.Key, header.Value));
         }
 
         return request;
@@ -119,6 +119,16 @@ public class D365Query<T>
     private string GetFullUrl(string relativeUrl)
     {
         return $"{_options.GetBaseUrl()}{relativeUrl}";
+    }
+
+    private static string MaskHeaderValue(string key, IEnumerable<string> values)
+    {
+        if (string.Equals(key, "Authorization", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Bearer ***";
+        }
+
+        return string.Join(",", values);
     }
 
     #endregion
@@ -383,7 +393,7 @@ public class D365Query<T>
                 }
             }
 
-            _logger.LogInformation("Fetched chunk (total collected {Count})", records.Count);
+            _logger.LogDebug("Fetched chunk (total collected {Count})", records.Count);
             currentUrl = nextUrl;
         }
 
@@ -417,7 +427,7 @@ public class D365Query<T>
             return result;
         }
 
-        _logger.LogInformation("Record created successfully.");
+        _logger.LogDebug("Record created successfully.");
         return result;
     }
 
@@ -462,7 +472,7 @@ public class D365Query<T>
             return result;
         }
 
-        _logger.LogInformation("Record created successfully.");
+        _logger.LogDebug("Record created successfully.");
         return result;
     }
 
@@ -508,7 +518,7 @@ public class D365Query<T>
             return default!;
         }
 
-        _logger.LogInformation("Record created successfully.");
+        _logger.LogDebug("Record created successfully.");
 
         try
         {
@@ -576,7 +586,7 @@ public class D365Query<T>
             return result;
         }
 
-        _logger.LogInformation("Record updated successfully.");
+        _logger.LogDebug("Record updated successfully.");
         return result;
     }
 
@@ -644,7 +654,7 @@ public class D365Query<T>
             return result;
         }
 
-        _logger.LogInformation("Record updated successfully.");
+        _logger.LogDebug("Record updated successfully.");
         return result;
     }
 
@@ -687,7 +697,7 @@ public class D365Query<T>
             return result;
         }
 
-        _logger.LogInformation("Record deleted successfully.");
+        _logger.LogDebug("Record deleted successfully.");
         return result;
     }
 
@@ -767,7 +777,7 @@ public class D365Query<T>
     {
         try
         {
-            _logger.LogInformation("Fetching: {Url}", GetFullUrl(url));
+            _logger.LogDebug("Fetching: {Url}", GetFullUrl(url));
 
             var httpClient = _httpClientFactory.CreateClient(_options.HttpClientName);
             var request = await CreateHttpRequestMessageAsync(HttpMethod.Get, url);
