@@ -83,6 +83,7 @@ public class D365Service : ID365Service
     }
 
     /// <inheritdoc />
+    [Obsolete("D365Service (non-generic) is legacy. Use Entity<T>(...) to get D365Query<T> instead.")]
     public D365Service Entity(string entity)
     {
         _entity = entity;
@@ -91,6 +92,7 @@ public class D365Service : ID365Service
     }
 
     /// <inheritdoc />
+    [Obsolete("D365Service (non-generic) is legacy. Use Entity<T>(...) to get D365Query<T> instead.")]
     public D365Service Entity(Enum entity)
     {
         return Entity(GetEntityNameFromEnum(entity));

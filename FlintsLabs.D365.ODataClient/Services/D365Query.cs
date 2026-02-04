@@ -3,9 +3,12 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Mime;
 using System.Net.Sockets;
+using System.Reflection;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using FlintsLabs.D365.ODataClient.Attributes;
 using FlintsLabs.D365.ODataClient.Expressions;
 using FlintsLabs.D365.ODataClient.Extensions;
 using Microsoft.Extensions.Logging;
@@ -39,6 +42,10 @@ public class D365Query<T>
     // Client-side filtering & paging
     private Expression<Func<T, bool>>? _clientPredicate;
     private int? _takeCount;
+    private Expression<Func<T, bool>>? _wherePredicate;
+
+    private sealed record KeyProperty(PropertyInfo Property, string ODataName);
+    private static readonly KeyProperty[] KeyProperties = ResolveKeyProperties();
 
     public D365Query(
         IHttpClientFactory factory,
@@ -142,6 +149,7 @@ public class D365Query<T>
         var visitor = new D365ExpressionVisitor(_options.BooleanFormatting);
         var filter = visitor.Translate(predicate.Body);
         AppendCriteria($"$filter={filter}");
+        _wherePredicate = predicate;
         return this;
     }
 
@@ -528,9 +536,7 @@ public class D365Query<T>
     /// </summary>
     public async Task<string> UpdateAsync(T obj)
     {
-        if (!_identities.Any())
-            throw new InvalidOperationException(
-                "No identity defined for PATCH operation. Please call AddIdentity() or use UpdateAsync(keys, obj).");
+        EnsureIdentitiesForWrite();
 
         var identityClause = string.Join(",", _identities.Select(kvp =>
             kvp.Value is string str ? $"{kvp.Key}='{str.Replace("'", "''")}'"
@@ -600,9 +606,7 @@ public class D365Query<T>
     /// </summary>
     public async Task<string> UpdateAsync(object partialObject)
     {
-        if (!_identities.Any())
-            throw new InvalidOperationException(
-                "No identity defined for PATCH operation. Please call AddIdentity() or use UpdateAsync(keys, obj).");
+        EnsureIdentitiesForWrite();
 
         var identityClause = string.Join(",", _identities.Select(kvp =>
             kvp.Value is string ? $"{kvp.Key}='{kvp.Value}'" : $"{kvp.Key}={kvp.Value}"));
@@ -649,9 +653,7 @@ public class D365Query<T>
     /// </summary>
     public async Task<string> DeleteAsync()
     {
-        if (!_identities.Any())
-            throw new InvalidOperationException(
-                "No identity defined for DELETE operation. Please call AddIdentity().");
+        EnsureIdentitiesForWrite();
 
         var identityClause = string.Join(",", _identities.Select(kvp =>
             kvp.Value is string str ? $"{kvp.Key}='{str.Replace("'", "''")}'"
@@ -898,6 +900,247 @@ public class D365Query<T>
         if (!string.IsNullOrWhiteSpace(_criteria))
             _criteria += "&";
         _criteria += part;
+    }
+
+    private void EnsureIdentitiesForWrite()
+    {
+        if (_identities.Any())
+            return;
+
+        if (TryPopulateIdentitiesFromWhere())
+        {
+            // Clear filter criteria used only for key lookup to avoid invalid PATCH/DELETE query strings.
+            _criteria = string.Empty;
+            return;
+        }
+
+        throw new InvalidOperationException(
+            "No identity defined for write operation. Please call AddIdentity(), use UpdateAsync(keys, obj), " +
+            "or add [OdataKey] attribute and specify key equality in Where(...).");
+    }
+
+    private bool TryPopulateIdentitiesFromWhere()
+    {
+        if (_wherePredicate == null)
+            return false;
+
+        if (KeyProperties.Length == 0)
+            throw new InvalidOperationException(
+                $"No [OdataKey] attribute found on {typeof(T).Name}. " +
+                "Add [OdataKey] to the key property, or use AddIdentity() explicitly.");
+
+        var keyValues = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        var nonKeyFound = false;
+
+        if (!TryExtractKeyValues(_wherePredicate.Body, keyValues, ref nonKeyFound))
+            throw new InvalidOperationException(
+                "Where(...) for UpdateAsync/DeleteAsync must use equality on key properties only.");
+
+        if (nonKeyFound)
+            throw new InvalidOperationException(
+                "Where(...) contains non-key filters. Use AddIdentity(...) or limit Where(...) to key equality only.");
+
+        var missingKeys = KeyProperties
+            .Select(k => k.ODataName)
+            .Where(k => !keyValues.ContainsKey(k))
+            .ToList();
+
+        if (missingKeys.Count > 0)
+            throw new InvalidOperationException(
+                $"Missing key(s) in Where(...) for write operation: {string.Join(", ", missingKeys)}");
+
+        foreach (var kvp in keyValues)
+        {
+            _identities[kvp.Key] = kvp.Value;
+        }
+
+        return true;
+    }
+
+    private static bool TryExtractKeyValues(Expression expr, Dictionary<string, object?> keyValues, ref bool nonKeyFound)
+    {
+        expr = StripConvert(expr);
+
+        if (expr is BinaryExpression binary)
+        {
+            if (binary.NodeType == ExpressionType.AndAlso)
+            {
+                var leftOk = TryExtractKeyValues(binary.Left, keyValues, ref nonKeyFound);
+                var rightOk = TryExtractKeyValues(binary.Right, keyValues, ref nonKeyFound);
+                return leftOk && rightOk;
+            }
+
+            if (binary.NodeType == ExpressionType.Equal)
+            {
+                return TryExtractKeyEquality(binary.Left, binary.Right, keyValues, ref nonKeyFound);
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TryExtractKeyEquality(
+        Expression left,
+        Expression right,
+        Dictionary<string, object?> keyValues,
+        ref bool nonKeyFound)
+    {
+        left = StripConvert(left);
+        right = StripConvert(right);
+
+        if (TryGetKeyProperty(left, out var keyProp))
+        {
+            var value = EvaluateExpression(right);
+            keyValues[keyProp.ODataName] = ConvertToPropertyType(value, keyProp.Property);
+            return true;
+        }
+
+        if (TryGetKeyProperty(right, out keyProp))
+        {
+            var value = EvaluateExpression(left);
+            keyValues[keyProp.ODataName] = ConvertToPropertyType(value, keyProp.Property);
+            return true;
+        }
+
+        if (IsParameterMember(left) || IsParameterMember(right))
+        {
+            nonKeyFound = true;
+        }
+
+        return false;
+    }
+
+    private static bool TryGetKeyProperty(Expression expr, out KeyProperty keyProperty)
+    {
+        keyProperty = null!;
+        if (!IsParameterMember(expr, out var memberInfo))
+            return false;
+
+        if (memberInfo is PropertyInfo prop)
+        {
+            var isKey = prop.GetCustomAttribute<OdataKeyAttribute>() != null;
+            if (!isKey)
+                return false;
+
+            var odataName = GetJsonName(prop);
+            keyProperty = new KeyProperty(prop, odataName);
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsParameterMember(Expression expr)
+    {
+        return IsParameterMember(expr, out _);
+    }
+
+    private static bool IsParameterMember(Expression expr, out MemberInfo? member)
+    {
+        member = null;
+        if (expr is MemberExpression memberExpr && memberExpr.Expression is ParameterExpression)
+        {
+            member = memberExpr.Member;
+            return true;
+        }
+        return false;
+    }
+
+    private static Expression StripConvert(Expression expr)
+    {
+        while (expr is UnaryExpression u &&
+               (u.NodeType == ExpressionType.Convert || u.NodeType == ExpressionType.ConvertChecked))
+        {
+            expr = u.Operand;
+        }
+        return expr;
+    }
+
+    private static object? EvaluateExpression(Expression expr)
+    {
+        expr = StripConvert(expr);
+
+        if (expr is ConstantExpression c)
+            return c.Value;
+
+        if (expr is MemberExpression m)
+            return GetValue(m);
+
+        return Expression.Lambda(expr).Compile().DynamicInvoke();
+    }
+
+    private static object? GetValue(MemberExpression member)
+    {
+        if (member.Member is FieldInfo field)
+        {
+            var target = member.Expression switch
+            {
+                MemberExpression inner => GetValue(inner),
+                ConstantExpression constExpr => constExpr.Value,
+                _ => null
+            };
+
+            return field.IsStatic ? field.GetValue(null) : field.GetValue(target);
+        }
+
+        if (member.Member is PropertyInfo prop)
+        {
+            var target = member.Expression switch
+            {
+                MemberExpression inner => GetValue(inner),
+                ConstantExpression constExpr => constExpr.Value,
+                _ => null
+            };
+
+            if (prop.GetMethod?.IsStatic == true)
+                return prop.GetValue(null);
+
+            if (target == null && prop.DeclaringType?.IsValueType == true)
+            {
+                var lambda = Expression.Lambda(member);
+                return lambda.Compile().DynamicInvoke();
+            }
+
+            return prop.GetValue(target);
+        }
+
+        return null;
+    }
+
+    private static object? ConvertToPropertyType(object? value, PropertyInfo property)
+    {
+        if (value == null)
+            return null;
+
+        var targetType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
+        if (targetType.IsAssignableFrom(value.GetType()))
+            return value;
+
+        if (targetType == typeof(Guid))
+        {
+            if (value is Guid g) return g;
+            if (value is string s) return Guid.Parse(s);
+        }
+
+        if (targetType.IsEnum)
+            return Enum.Parse(targetType, value.ToString() ?? string.Empty, true);
+
+        return Convert.ChangeType(value, targetType, CultureInfo.InvariantCulture);
+    }
+
+    private static string GetJsonName(MemberInfo member)
+    {
+        var attr = member.GetCustomAttribute<JsonPropertyNameAttribute>();
+        return attr?.Name ?? member.Name;
+    }
+
+    private static KeyProperty[] ResolveKeyProperties()
+    {
+        var props = typeof(T).GetProperties(BindingFlags.Public | BindingFlags.Instance);
+        return props
+            .Where(p => p.GetCustomAttribute<OdataKeyAttribute>() != null)
+            .Select(p => new KeyProperty(p, GetJsonName(p)))
+            .ToArray();
     }
 
     #endregion

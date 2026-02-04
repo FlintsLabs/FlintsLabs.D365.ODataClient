@@ -574,6 +574,11 @@ await _d365.Entity<Customer>("CustomersV3")
     .CrossCompany()
     .UpdateAsync(new { CustomerName = "Updated Name" });
 
+// Update by Key (Where + [OdataKey] attribute required)
+await _d365.Entity<EgrHeadETHTable>("rvl_egrheadeths")
+    .Where(x => x.Id == headId)
+    .UpdateAsync(new { rvl_wmsstatus = false });
+
 // Delete
 await _d365.Entity<Customer>("CustomersV3")
     .AddIdentity("CustomerAccount", "CUST001")
@@ -584,9 +589,84 @@ await _d365.Entity<Customer>("CustomersV3")
 
 ---
 
+## OdataKey Update/Delete Examples
+
+### 1) Single Key
+
+```csharp
+using FlintsLabs.D365.ODataClient.Attributes;
+using System.Text.Json.Serialization;
+
+public class EgrHeadETHTable
+{
+    [OdataKey]
+    [JsonPropertyName("rvl_egrheadethid")]
+    public Guid Id { get; set; }
+}
+```
+
+**Update**
+```csharp
+await _d365.Entity<EgrHeadETHTable>("rvl_egrheadeths")
+    .Where(x => x.Id == headId)
+    .UpdateAsync(new { rvl_wmsstatus = false });
+```
+
+**Delete**
+```csharp
+await _d365.Entity<EgrHeadETHTable>("rvl_egrheadeths")
+    .Where(x => x.Id == headId)
+    .DeleteAsync();
+```
+
+### 2) Composite Key
+
+```csharp
+using FlintsLabs.D365.ODataClient.Attributes;
+using System.Text.Json.Serialization;
+
+public class SalesLine
+{
+    [OdataKey]
+    [JsonPropertyName("dataAreaId")]
+    public string DataAreaId { get; set; } = "";
+
+    [OdataKey]
+    [JsonPropertyName("SalesId")]
+    public string SalesId { get; set; } = "";
+
+    [OdataKey]
+    [JsonPropertyName("LineNumber")]
+    public decimal LineNumber { get; set; }
+}
+```
+
+**Update (ต้องระบุ key ให้ครบ)**
+```csharp
+await _d365.Entity<SalesLine>("SalesOrderLines")
+    .Where(x => x.DataAreaId == "usmf" && x.SalesId == "SO-001" && x.LineNumber == 1m)
+    .UpdateAsync(new { QtyOrdered = 5 });
+```
+
+**Delete (ต้องระบุ key ให้ครบ)**
+```csharp
+await _d365.Entity<SalesLine>("SalesOrderLines")
+    .Where(x => x.DataAreaId == "usmf" && x.SalesId == "SO-001" && x.LineNumber == 1m)
+    .DeleteAsync();
+```
+
+> [!NOTE]
+> ถ้าไม่อยากใช้ `[OdataKey]` ยังสามารถใช้ `AddIdentity(...)` ได้เหมือนเดิม
+
+---
+
 ## API Reference
 
 ### Query Methods
+
+> [!NOTE]
+> The non-generic `Entity(string)` / `Entity(Enum)` methods return `D365Service` and are **deprecated**.
+> Use `Entity<T>(...)` to get `D365Query<T>` instead.
 
 | Method | Description |
 |--------|-------------|

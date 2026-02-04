@@ -10,6 +10,7 @@ public interface ID365Service
     /// <summary>
     /// Start a query for the specified entity (non-generic)
     /// </summary>
+    [Obsolete("D365Service (non-generic) is legacy. Use Entity<T>(...) to get D365Query<T> instead.")]
     D365Service Entity(string entity);
     
     /// <summary>
@@ -31,6 +32,7 @@ public interface ID365Service
     /// d365.Entity(MyEntities.Customer).ToListAsync();
     /// </code>
     /// </example>
+    [Obsolete("D365Service (non-generic) is legacy. Use Entity<T>(...) to get D365Query<T> instead.")]
     D365Service Entity(Enum entity);
     
     /// <summary>
