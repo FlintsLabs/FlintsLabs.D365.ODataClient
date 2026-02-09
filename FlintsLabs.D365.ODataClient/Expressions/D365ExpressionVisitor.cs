@@ -25,12 +25,32 @@ public class D365ExpressionVisitor : ExpressionVisitor
     /// </summary>
     public string Translate(Expression expression)
     {
-        Visit(expression);
-        return _sb.ToString();
+        try
+        {
+            Visit(expression);
+            return _sb.ToString();
+        }
+        catch (NotSupportedException ex)
+        {
+            throw new NotSupportedException(
+                $"Failed to translate LINQ expression to OData filter. {ex.Message} Expression: {expression}",
+                ex);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException(
+                $"Failed to translate LINQ expression to OData filter. Expression: {expression}",
+                ex);
+        }
     }
 
     protected override Expression VisitBinary(BinaryExpression node)
     {
+        if (node.NodeType == ExpressionType.Coalesce)
+        {
+            return VisitCoalesce(node);
+        }
+
         // Check if it's a logical operator (and/or)
         bool isLogical = node.NodeType is ExpressionType.AndAlso or ExpressionType.OrElse;
 
@@ -57,6 +77,25 @@ public class D365ExpressionVisitor : ExpressionVisitor
         if (needParen)
             _sb.Append(")");
 
+        return node;
+    }
+
+    /// <summary>
+    /// Translate null-coalescing operator (??) to OData coalesce(left,right)
+    /// </summary>
+    private Expression VisitCoalesce(BinaryExpression node)
+    {
+        if (node.Conversion != null)
+        {
+            throw new NotSupportedException(
+                "Coalesce with conversion is not supported. Use a simple null-coalescing expression without conversion.");
+        }
+
+        _sb.Append("coalesce(");
+        Visit(node.Left);
+        _sb.Append(",");
+        Visit(node.Right);
+        _sb.Append(")");
         return node;
     }
 

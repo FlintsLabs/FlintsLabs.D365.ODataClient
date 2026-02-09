@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.27] - 2026-02-09
+### Added
+- LINQ null-coalescing (`??`) translation support to OData `coalesce(left,right)`
+- Clear graceful error when coalesce translation is unsupported
+- Unit tests for coalesce translator and query URL output
+
+### Changed
+- Mask `Authorization` header value in request logs
+- Reduced noisy request logs from `Information` to `Debug` in key paths
+- Share token provider across service instances with lock-protected token refresh for parallel calls
+
 ## [1.2.26] - 2026-02-04
 ### Added
 - `[OdataKey]` attribute for key-based Update/Delete via `Where(...)`
