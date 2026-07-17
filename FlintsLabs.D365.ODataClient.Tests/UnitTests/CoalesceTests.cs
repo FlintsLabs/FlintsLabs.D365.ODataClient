@@ -3,6 +3,7 @@ using System.Net;
 using FlintsLabs.D365.ODataClient.Expressions;
 using FlintsLabs.D365.ODataClient.Extensions;
 using FlintsLabs.D365.ODataClient.Services;
+using FlintsLabs.D365.ODataClient.Tests.TestInfrastructure;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Moq.Protected;
@@ -58,7 +59,7 @@ public class CoalesceTests
         var query = new D365Query<TestEntity>(
             httpClientFactoryMock.Object,
             Mock.Of<ILogger>(),
-            Mock.Of<ID365AccessTokenProvider>(),
+            new StubTokenProvider("fake-token"),
             "TestEntities",
             new D365ClientOptions { Resource = "https://example.com" });
 

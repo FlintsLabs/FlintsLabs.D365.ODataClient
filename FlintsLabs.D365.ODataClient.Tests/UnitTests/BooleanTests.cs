@@ -1,4 +1,5 @@
 using FlintsLabs.D365.ODataClient.Services;
+using FlintsLabs.D365.ODataClient.Tests.TestInfrastructure;
 using FlintsLabs.D365.ODataClient.Extensions;
 using FlintsLabs.D365.ODataClient.Enums;
 using Microsoft.Extensions.Logging;
@@ -35,7 +36,7 @@ public class BooleanTests
         var query = new D365Query<TestEntity>(
             httpClientFactoryMock.Object,
             Mock.Of<ILogger>(),
-            Mock.Of<ID365AccessTokenProvider>(),
+            new StubTokenProvider("fake-token"),
             "TestEntities",
             options
         );
@@ -78,7 +79,7 @@ public class BooleanTests
         var query = new D365Query<TestEntity>(
             httpClientFactoryMock.Object,
             Mock.Of<ILogger>(),
-            Mock.Of<ID365AccessTokenProvider>(),
+            new StubTokenProvider("fake-token"),
             "TestEntities",
             options
         );
@@ -117,7 +118,7 @@ public class BooleanTests
         var query = new D365Query<TestEntity>(
             httpClientFactoryMock.Object,
             Mock.Of<ILogger>(),
-            Mock.Of<ID365AccessTokenProvider>(),
+            new StubTokenProvider("fake-token"),
             "TestEntities",
             options
         );
@@ -157,7 +158,7 @@ public class BooleanTests
         var query = new D365Query<TestEntity>(
             httpClientFactoryMock.Object,
             Mock.Of<ILogger>(),
-            Mock.Of<ID365AccessTokenProvider>(),
+            new StubTokenProvider("fake-token"),
             "TestEntities",
             options
         );

@@ -95,7 +95,7 @@ public class D365Query<T>
         var token = await _tokenProvider.GetAccessTokenAsync();
 
         var request = new HttpRequestMessage(method, url);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token.Value);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(MediaTypeNames.Application.Json));
 
         // Add extension headers

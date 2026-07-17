@@ -67,7 +67,11 @@ public class HeaderTests
             }));
 
         var tokenProviderMock = new Mock<ID365AccessTokenProvider>();
-        tokenProviderMock.Setup(x => x.GetAccessTokenAsync()).ReturnsAsync("fake-token");
+        tokenProviderMock
+            .Setup(x => x.GetAccessTokenAsync(It.IsAny<CancellationToken>()))
+            .Returns(ValueTask.FromResult(new FlintsLabs.D365.ODataClient.Models.D365AccessToken(
+                "fake-token",
+                DateTimeOffset.UtcNow.AddHours(1))));
 
         var options = new D365ClientOptions { Resource = "https://example.com" };
 

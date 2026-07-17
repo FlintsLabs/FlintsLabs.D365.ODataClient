@@ -1,9 +1,13 @@
+using FlintsLabs.D365.ODataClient.Models;
+
 namespace FlintsLabs.D365.ODataClient.Services;
 
-/// <summary>
-/// Interface for D365-specific access token provider
-/// </summary>
-public interface ID365AccessTokenProvider : IAccessTokenProvider
+public interface ID365AccessTokenProvider
 {
-    
+    ValueTask<D365AccessToken> GetAccessTokenAsync(
+        CancellationToken cancellationToken = default);
+
+    ValueTask<D365AccessToken> RefreshAccessTokenAsync(
+        string rejectedAccessToken,
+        CancellationToken cancellationToken = default);
 }

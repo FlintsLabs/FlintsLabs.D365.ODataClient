@@ -36,43 +36,34 @@ internal sealed class D365Transport(
 
         try
         {
-            var accessToken = await tokenProvider.GetAccessTokenAsync().ConfigureAwait(false);
+            var accessToken = await tokenProvider
+                .GetAccessTokenAsync(cancellationToken)
+                .ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
 
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            if (options.RequestTimeout != Timeout.InfiniteTimeSpan)
-            {
-                if (options.RequestTimeout <= TimeSpan.Zero)
-                    throw new InvalidOperationException("RequestTimeout must be positive or infinite.");
-
-                timeout.CancelAfter(options.RequestTimeout);
-            }
-
-            using var message = request.CreateMessage(accessToken);
             sendStarted = true;
-            using var response = await httpClient.SendAsync(
-                    message,
-                    HttpCompletionOption.ResponseHeadersRead,
-                    timeout.Token)
+            var response = await SendAttemptAsync(
+                    httpClient,
+                    request,
+                    accessToken.Value,
+                    requestUri,
+                    cancellationToken)
                 .ConfigureAwait(false);
-            var body = await response.Content.ReadAsStringAsync(timeout.Token).ConfigureAwait(false);
-            var headers = CaptureHeaders(response);
-            var requestId = ExtractRequestId(headers);
-            var mutationOutcome = ClassifyMutationOutcome(request, response.StatusCode);
+            if (response.StatusCode != HttpStatusCode.Unauthorized)
+                return response;
 
-            TryLog(() => logger.LogInformation(
-                "D365 {Method} {Entity} completed with {StatusCode}",
-                request.Method,
-                request.EntityName,
-                response.StatusCode));
+            accessToken = await tokenProvider
+                .RefreshAccessTokenAsync(accessToken.Value, cancellationToken)
+                .ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
 
-            return new D365Response(
-                response.StatusCode,
-                body,
-                headers,
-                requestUri,
-                requestId,
-                mutationOutcome);
+            return await SendAttemptAsync(
+                    httpClient,
+                    request,
+                    accessToken.Value,
+                    requestUri,
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
         catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested)
         {
@@ -111,6 +102,58 @@ internal sealed class D365Transport(
                 mutationOutcome: TransportFailureOutcome(request, sendStarted),
                 innerException: exception);
         }
+    }
+
+    private async Task<D365Response> SendAttemptAsync(
+        HttpClient httpClient,
+        D365Request request,
+        string accessToken,
+        Uri requestUri,
+        CancellationToken cancellationToken)
+    {
+        using var timeout = CreateTimeoutTokenSource(cancellationToken);
+        using var message = request.CreateMessage(accessToken);
+        using var response = await httpClient.SendAsync(
+                message,
+                HttpCompletionOption.ResponseHeadersRead,
+                timeout.Token)
+            .ConfigureAwait(false);
+        var body = await response.Content
+            .ReadAsStringAsync(timeout.Token)
+            .ConfigureAwait(false);
+        var headers = CaptureHeaders(response);
+        var requestId = ExtractRequestId(headers);
+        var mutationOutcome = ClassifyMutationOutcome(request, response.StatusCode);
+
+        TryLog(() => logger.LogInformation(
+            "D365 {Method} {Entity} completed with {StatusCode}",
+            request.Method,
+            request.EntityName,
+            response.StatusCode));
+
+        return new D365Response(
+            response.StatusCode,
+            body,
+            headers,
+            requestUri,
+            requestId,
+            mutationOutcome);
+    }
+
+    private CancellationTokenSource CreateTimeoutTokenSource(
+        CancellationToken cancellationToken)
+    {
+        var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        if (options.RequestTimeout == Timeout.InfiniteTimeSpan)
+            return timeout;
+        if (options.RequestTimeout <= TimeSpan.Zero)
+        {
+            timeout.Dispose();
+            throw new InvalidOperationException("RequestTimeout must be positive or infinite.");
+        }
+
+        timeout.CancelAfter(options.RequestTimeout);
+        return timeout;
     }
 
     public async Task<D365Response> SendEnsuredAsync(

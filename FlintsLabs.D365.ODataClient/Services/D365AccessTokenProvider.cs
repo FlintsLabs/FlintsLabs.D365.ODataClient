@@ -1,6 +1,6 @@
 using System.Text.Json;
-using System.Threading;
 using FlintsLabs.D365.ODataClient.Extensions;
+using FlintsLabs.D365.ODataClient.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Identity.Client;
@@ -8,16 +8,17 @@ using Microsoft.Identity.Client;
 namespace FlintsLabs.D365.ODataClient.Services;
 
 /// <summary>
-/// Unified access token provider for D365 F&O
-/// Supports both Azure AD (Cloud) and ADFS (On-Premise) authentication
+/// Provides cached D365 access tokens for Azure AD or ADFS authentication.
 /// </summary>
-public class D365AccessTokenProvider : ID365AccessTokenProvider
+public sealed class D365AccessTokenProvider : ID365AccessTokenProvider
 {
+    private static readonly TimeSpan RefreshBuffer = TimeSpan.FromMinutes(5);
+
     private readonly ILogger<D365AccessTokenProvider> _logger;
     private readonly D365ClientOptions _options;
+    private readonly Func<CancellationToken, ValueTask<D365AccessToken>> _acquireToken;
     private readonly SemaphoreSlim _tokenLock = new(1, 1);
-    private string? _accessToken;
-    private DateTime? _expiresOn;
+    private D365AccessToken? _accessToken;
 
     public D365AccessTokenProvider(
         ILogger<D365AccessTokenProvider> logger,
@@ -25,35 +26,36 @@ public class D365AccessTokenProvider : ID365AccessTokenProvider
     {
         _logger = logger;
         _options = options.Value;
+        _acquireToken = AcquireTokenAsync;
     }
-    
-    /// <summary>
-    /// Get access token with automatic caching and refresh
-    /// Routes to Azure AD or ADFS based on configuration
-    /// </summary>
-    public async Task<string> GetAccessTokenAsync()
-    {
-        if (IsTokenValid())
-        {
-            _logger.LogDebug("Access token is still valid, using cached token");
-            return _accessToken!;
-        }
 
-        await _tokenLock.WaitAsync().ConfigureAwait(false);
+    internal D365AccessTokenProvider(
+        ILogger<D365AccessTokenProvider> logger,
+        D365ClientOptions options,
+        Func<CancellationToken, ValueTask<D365AccessToken>> acquireToken)
+    {
+        _logger = logger;
+        _options = options;
+        _acquireToken = acquireToken;
+    }
+
+    public async ValueTask<D365AccessToken> GetAccessTokenAsync(
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var cachedToken = Volatile.Read(ref _accessToken);
+        if (IsTokenValid(cachedToken))
+            return cachedToken!;
+
+        await _tokenLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            if (IsTokenValid())
-            {
-                _logger.LogDebug("Access token refreshed by another caller, using cached token");
-                return _accessToken!;
-            }
+            cachedToken = Volatile.Read(ref _accessToken);
+            if (IsTokenValid(cachedToken))
+                return cachedToken!;
 
-            // Route to appropriate auth method
-            return _options.AuthType switch
-            {
-                D365AuthType.ADFS => await GetAdfsTokenAsync(),
-                _ => await GetAzureAdTokenAsync()
-            };
+            return await AcquireAndCacheTokenAsync(cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -61,121 +63,165 @@ public class D365AccessTokenProvider : ID365AccessTokenProvider
         }
     }
 
-    private bool IsTokenValid()
+    public async ValueTask<D365AccessToken> RefreshAccessTokenAsync(
+        string rejectedAccessToken,
+        CancellationToken cancellationToken = default)
     {
-        return !string.IsNullOrWhiteSpace(_accessToken) &&
-               _expiresOn.HasValue &&
-               DateTime.UtcNow.AddMinutes(5) < _expiresOn;
-    }
+        ArgumentException.ThrowIfNullOrWhiteSpace(rejectedAccessToken);
+        cancellationToken.ThrowIfCancellationRequested();
 
-    /// <summary>
-    /// Acquire token using Azure AD / Microsoft Entra ID (MSAL)
-    /// </summary>
-    private async Task<string> GetAzureAdTokenAsync()
-    {
+        await _tokenLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            _logger.LogInformation("Acquiring access token from Azure AD / Dataverse");
-            
-            var authBuilder = ConfidentialClientApplicationBuilder
-                .Create(_options.ClientId)
-                .WithTenantId(_options.TenantId)
-                .WithClientSecret(_options.ClientSecret)
-                .WithAuthority(AzureCloudInstance.AzurePublic, _options.TenantId)
-                .Build();
+            var cachedToken = Volatile.Read(ref _accessToken);
+            if (IsTokenValid(cachedToken)
+                && !string.Equals(cachedToken!.Value, rejectedAccessToken, StringComparison.Ordinal))
+            {
+                return cachedToken;
+            }
 
-            // Use explicit Scope if provided (Dataverse), otherwise use Resource + /.default (F&O)
-            string[] scopes = !string.IsNullOrWhiteSpace(_options.Scope) 
-                ? [_options.Scope] 
-                : [_options.Resource?.TrimEnd('/') + "/.default"];
+            if (string.Equals(cachedToken?.Value, rejectedAccessToken, StringComparison.Ordinal))
+                Volatile.Write(ref _accessToken, null);
 
-            AuthenticationResult token = await authBuilder.AcquireTokenForClient(scopes).ExecuteAsync();
-            _expiresOn = token.ExpiresOn.UtcDateTime;
-            _accessToken = token.AccessToken;
-            
-            _logger.LogInformation("Successfully acquired Azure AD access token");
-            return _accessToken;
+            return await AcquireAndCacheTokenAsync(cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception e)
+        finally
         {
-            _logger.LogError(e, "Failed to acquire access token from Azure AD");
-            throw;
+            _tokenLock.Release();
         }
     }
 
-    /// <summary>
-    /// Acquire token using ADFS (Active Directory Federation Services)
-    /// </summary>
-    private async Task<string> GetAdfsTokenAsync()
+    private async ValueTask<D365AccessToken> AcquireAndCacheTokenAsync(
+        CancellationToken cancellationToken)
+    {
+        var token = await _acquireToken(cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(token.Value))
+            throw new InvalidOperationException("The token authority returned an empty access token.");
+
+        Volatile.Write(ref _accessToken, token);
+        return token;
+    }
+
+    private static bool IsTokenValid(D365AccessToken? token)
+    {
+        return token is not null
+               && !string.IsNullOrWhiteSpace(token.Value)
+               && DateTimeOffset.UtcNow.Add(RefreshBuffer) < token.ExpiresOn;
+    }
+
+    private ValueTask<D365AccessToken> AcquireTokenAsync(CancellationToken cancellationToken)
+    {
+        return _options.AuthType switch
+        {
+            D365AuthType.ADFS => GetAdfsTokenAsync(cancellationToken),
+            _ => GetAzureAdTokenAsync(cancellationToken)
+        };
+    }
+
+    private async ValueTask<D365AccessToken> GetAzureAdTokenAsync(
+        CancellationToken cancellationToken)
+    {
+        TryLog(() => _logger.LogDebug("Acquiring D365 access token from Azure AD"));
+
+        var application = ConfidentialClientApplicationBuilder
+            .Create(_options.ClientId)
+            .WithTenantId(_options.TenantId)
+            .WithClientSecret(_options.ClientSecret)
+            .WithAuthority(AzureCloudInstance.AzurePublic, _options.TenantId)
+            .Build();
+
+        var scopes = !string.IsNullOrWhiteSpace(_options.Scope)
+            ? new[] { _options.Scope }
+            : new[] { _options.Resource?.TrimEnd('/') + "/.default" };
+        var result = await application
+            .AcquireTokenForClient(scopes)
+            .ExecuteAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        return new D365AccessToken(result.AccessToken, result.ExpiresOn);
+    }
+
+    private async ValueTask<D365AccessToken> GetAdfsTokenAsync(
+        CancellationToken cancellationToken)
+    {
+        TryLog(() => _logger.LogDebug("Acquiring D365 access token from ADFS"));
+
+        if (string.IsNullOrWhiteSpace(_options.TokenEndpoint))
+        {
+            throw new InvalidOperationException(
+                "TokenEndpoint is required for ADFS authentication. Set D365:TokenEndpoint in configuration.");
+        }
+
+        var tokenPostData = new Dictionary<string, string>
+        {
+            ["tenant_id"] = _options.TenantId ?? "adfs",
+            ["client_id"] = _options.ClientId ?? string.Empty,
+            ["client_secret"] = _options.ClientSecret ?? string.Empty,
+            ["resource"] = _options.Resource ?? string.Empty,
+            ["grant_type"] = _options.GrantType
+        };
+
+        // Preserve the existing on-premise behavior for self-signed ADFS certificates.
+        using var handler = new HttpClientHandler
+        {
+            ServerCertificateCustomValidationCallback = (_, _, _, _) => true
+        };
+        using var httpClient = new HttpClient(handler);
+        using var content = new FormUrlEncodedContent(tokenPostData);
+        using var response = await httpClient
+            .PostAsync(_options.TokenEndpoint, content, cancellationToken)
+            .ConfigureAwait(false);
+        var responseContent = await response.Content
+            .ReadAsStringAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new HttpRequestException(
+                $"ADFS token request failed with HTTP {(int)response.StatusCode} ({response.StatusCode}).",
+                null,
+                response.StatusCode);
+        }
+
+        using var document = JsonDocument.Parse(responseContent);
+        if (document.RootElement.ValueKind != JsonValueKind.Object
+            || !document.RootElement.TryGetProperty("access_token", out var tokenElement)
+            || tokenElement.ValueKind != JsonValueKind.String
+            || string.IsNullOrWhiteSpace(tokenElement.GetString()))
+        {
+            throw new InvalidOperationException("ADFS response did not contain a valid access_token.");
+        }
+
+        var expiresOn = DateTimeOffset.UtcNow.AddHours(1);
+        if (document.RootElement.TryGetProperty("expires_in", out var expiresInElement)
+            && TryReadSeconds(expiresInElement, out var expiresInSeconds))
+        {
+            expiresOn = DateTimeOffset.UtcNow.AddSeconds(expiresInSeconds);
+        }
+
+        return new D365AccessToken(tokenElement.GetString()!, expiresOn);
+    }
+
+    private static bool TryReadSeconds(JsonElement element, out int seconds)
+    {
+        if (element.ValueKind == JsonValueKind.Number)
+            return element.TryGetInt32(out seconds) && seconds >= 0;
+        if (element.ValueKind == JsonValueKind.String)
+            return int.TryParse(element.GetString(), out seconds) && seconds >= 0;
+
+        seconds = 0;
+        return false;
+    }
+
+    private static void TryLog(Action log)
     {
         try
         {
-            _logger.LogInformation("Acquiring access token from ADFS");
-            
-            if (string.IsNullOrWhiteSpace(_options.TokenEndpoint))
-            {
-                throw new InvalidOperationException("TokenEndpoint is required for ADFS authentication. Set D365:TokenEndpoint in configuration.");
-            }
-
-            var tokenPostData = new Dictionary<string, string>
-            {
-                { "tenant_id", _options.TenantId ?? "adfs" },
-                { "client_id", _options.ClientId ?? string.Empty },
-                { "client_secret", _options.ClientSecret ?? string.Empty },
-                { "resource", _options.Resource ?? string.Empty },
-                { "grant_type", _options.GrantType }
-            };
-
-            // Create handler that accepts self-signed certificates (common in on-premise)
-            var handler = new HttpClientHandler
-            {
-                ServerCertificateCustomValidationCallback = (message, cert, chain, sslPolicyErrors) => true
-            };
-
-            using var httpClient = new HttpClient(handler);
-            var response = await httpClient.PostAsync(
-                _options.TokenEndpoint, 
-                new FormUrlEncodedContent(tokenPostData));
-
-            if (!response.IsSuccessStatusCode)
-            {
-                var errorContent = await response.Content.ReadAsStringAsync();
-                _logger.LogError("Failed to acquire ADFS token: {StatusCode} - {Error}", 
-                    response.StatusCode, errorContent);
-                throw new HttpRequestException($"ADFS token request failed: {response.StatusCode}");
-            }
-
-            var responseContent = await response.Content.ReadAsStringAsync();
-            var jsonResponse = JsonSerializer.Deserialize<Dictionary<string, object>>(responseContent);
-            
-            if (jsonResponse == null || !jsonResponse.TryGetValue("access_token", out var accessTokenObj))
-            {
-                throw new InvalidOperationException("ADFS response did not contain access_token");
-            }
-
-            _accessToken = accessTokenObj.ToString()!;
-            
-            // Parse expires_in if available
-            if (jsonResponse.TryGetValue("expires_in", out var expiresInObj))
-            {
-                if (int.TryParse(expiresInObj.ToString(), out var expiresIn))
-                {
-                    _expiresOn = DateTime.UtcNow.AddSeconds(expiresIn);
-                }
-            }
-            else
-            {
-                // Default to 1 hour if not specified
-                _expiresOn = DateTime.UtcNow.AddHours(1);
-            }
-
-            _logger.LogInformation("Successfully acquired ADFS access token");
-            return _accessToken;
+            log();
         }
-        catch (Exception e)
+        catch
         {
-            _logger.LogError(e, "Failed to acquire access token from ADFS");
-            throw;
+            // Diagnostics must not change token acquisition behavior.
         }
     }
 }

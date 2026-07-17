@@ -58,8 +58,8 @@ public class TestInfrastructureTests
         var first = await provider.GetAccessTokenAsync();
         var second = await provider.GetAccessTokenAsync();
 
-        Assert.Equal("token-1", first);
-        Assert.Equal("token-1", second);
+        Assert.Equal("token-1", first.Value);
+        Assert.Equal("token-1", second.Value);
         Assert.Equal(2, provider.GetCount);
     }
 

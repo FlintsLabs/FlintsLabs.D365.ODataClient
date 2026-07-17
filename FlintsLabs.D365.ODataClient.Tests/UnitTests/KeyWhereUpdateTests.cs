@@ -47,7 +47,11 @@ public class KeyWhereUpdateTests
         httpClientFactoryMock.Setup(x => x.CreateClient(It.IsAny<string>())).Returns(httpClient);
 
         var tokenProviderMock = new Mock<ID365AccessTokenProvider>();
-        tokenProviderMock.Setup(x => x.GetAccessTokenAsync()).ReturnsAsync("fake-token");
+        tokenProviderMock
+            .Setup(x => x.GetAccessTokenAsync(It.IsAny<CancellationToken>()))
+            .Returns(ValueTask.FromResult(new FlintsLabs.D365.ODataClient.Models.D365AccessToken(
+                "fake-token",
+                DateTimeOffset.UtcNow.AddHours(1))));
 
         var options = new D365ClientOptions
         {
