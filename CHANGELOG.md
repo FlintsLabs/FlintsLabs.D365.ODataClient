@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-07-17
+### Breaking
+- Replaced `ID365Service` / `ID365ServiceFactory` with `ID365Client` / `ID365ClientFactory`
+- Removed the version 1 compatibility service instead of retaining default-return behavior
+- Require generic `Entity<T>(...)` query creation through `ID365Client`
+- High-level reads now throw for HTTP, authentication, transport, timeout, protocol, and serialization failures instead of returning `null`, empty lists, or zero
+- High-level mutations now return `D365Response` and throw for every non-2xx status, including DELETE 404
+- Strict count parsing now requires a valid non-negative 64-bit `@odata.count`; `CountAsync` throws on `int` overflow
+
+### Added
+- Fail-closed typed exception model with failure kind, HTTP/D365 details, request ID, retry guidance, mutation outcome, and partial page count
+- Raw `ID365Client.SendAsync` API that preserves every received HTTP status
+- `D365Response<T>` for typed mutation responses
+- `LongCountAsync` and strict collection-envelope validation
+- Validated same-endpoint pagination, loop detection, configurable `MaxPages`, and all-or-error list results
+- Opt-in bounded retries for GET/HEAD with `Retry-After`, exponential backoff, and jitter
+- Per-request timeout and cancellation propagation across token acquisition, transport, retry delay, and pagination
+- Named singleton clients with shared token cache and single-flight acquisition/refresh for parallel callers
+- Safe OData literal formatting and URI encoding for GUIDs, dates, numerics, apostrophes, reserved characters, and Unicode
+- Official version 2 migration, operations, security, query, authentication, and BioWMS recovery documentation
+
+### Changed
+- Refresh and resend at most once after an actual HTTP 401; mutation retries remain disabled for ambiguous timeout/transport/408/429/5xx outcomes
+- Typed POST requires a non-empty non-null JSON representation and preserves `SucceededOrAccepted` when response parsing fails
+- Framework `HttpClient` Information logs for package-named clients are filtered to prevent full OData URLs from exposing key/filter values
+- Package-owned logs no longer include bearer tokens, payloads, response bodies, key values, or query-option values
+- Target frameworks remain .NET 8 and .NET 10
+
+### Security
+- Known compatibility risk: version 2.0.0 retains the existing permissive TLS certificate callback for D365 and authentication clients. It accepts every server certificate. Deploy only on a trusted network path and review `docs/v2/security-and-logging.md`.
+- Application code remains responsible for redacting raw response/exception bodies, headers, and request URIs before logging.
+
+See [Migration from version 1](docs/v2/migration-from-v1.md) for required application changes.
+
 ## [1.2.27] - 2026-02-09
 ### Added
 - LINQ null-coalescing (`??`) translation support to OData `coalesce(left,right)`
