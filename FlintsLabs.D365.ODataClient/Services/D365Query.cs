@@ -1,16 +1,18 @@
 using System.Linq.Expressions;
-using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Mime;
-using System.Net.Sockets;
 using System.Reflection;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using FlintsLabs.D365.ODataClient.Attributes;
+using FlintsLabs.D365.ODataClient.Exceptions;
 using FlintsLabs.D365.ODataClient.Expressions;
 using FlintsLabs.D365.ODataClient.Extensions;
+using FlintsLabs.D365.ODataClient.Models;
+using FlintsLabs.D365.ODataClient.OData;
+using FlintsLabs.D365.ODataClient.Transport;
 using Microsoft.Extensions.Logging;
 
 namespace FlintsLabs.D365.ODataClient.Services;
@@ -23,6 +25,7 @@ public class D365Query<T>
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger _logger;
     private readonly ID365AccessTokenProvider _tokenProvider;
+    private readonly ID365Transport _transport;
     private readonly D365ClientOptions _options;
     private readonly string _entity;
     private string _criteria = string.Empty;
@@ -53,12 +56,30 @@ public class D365Query<T>
         ID365AccessTokenProvider tokenProvider,
         string entity,
         D365ClientOptions options)
+        : this(
+            factory,
+            logger,
+            tokenProvider,
+            entity,
+            options,
+            new D365Transport(factory, logger, tokenProvider, options))
+    {
+    }
+
+    internal D365Query(
+        IHttpClientFactory factory,
+        ILogger logger,
+        ID365AccessTokenProvider tokenProvider,
+        string entity,
+        D365ClientOptions options,
+        ID365Transport transport)
     {
         _httpClientFactory = factory;
         _logger = logger;
         _tokenProvider = tokenProvider;
         _entity = entity;
         _options = options;
+        _transport = transport;
     }
 
     #region Header & Utility
@@ -331,70 +352,29 @@ public class D365Query<T>
     /// </summary>
     public async Task<List<T>> ToListAsync(CancellationToken cancellationToken = default)
     {
-        var queryParts = new List<string>();
-        if (_crossCompany)
-            queryParts.Add("cross-company=true");
-        if (!string.IsNullOrWhiteSpace(_criteria))
-            queryParts.Add(_criteria);
-
-        // If no client predicate, send $top to server
-        if (_clientPredicate == null && _takeCount.HasValue)
-        {
-            queryParts.Add($"$top={_takeCount}");
-        }
-
-        var baseUrl = $"{_entity}?{string.Join("&", queryParts)}";
+        var baseUrl = BuildReadUrl(includeServerTop: true);
         _logger.LogInformation("D365 GET: {Url}", GetFullUrl(baseUrl));
 
         var records = new List<T>();
-        var currentUrl = baseUrl;
+        string? currentUrl = baseUrl;
 
-        // Fetch data continuously until nextLink is exhausted
         while (!string.IsNullOrEmpty(currentUrl))
         {
-            // If limited and already have enough (for client filter case), stop
             if (_clientPredicate != null && _takeCount.HasValue && records.Count >= _takeCount.Value)
                 break;
 
-            var (nextUrl, jsonDocument, _) = await GetResponseJsonDocumentAsync(currentUrl, cancellationToken);
-
-            if (jsonDocument is null)
-                break;
-
-            using var doc = jsonDocument;
-            if (doc.RootElement.TryGetProperty("value", out JsonElement valueElement) &&
-                valueElement.ValueKind == JsonValueKind.Array)
+            var page = await GetPageAsync(currentUrl, cancellationToken).ConfigureAwait(false);
+            foreach (var item in page.Records)
             {
-                if (_clientPredicate != null)
-                {
-                    // Scan JSON elements first without deserializing everything
-                    foreach (var element in valueElement.EnumerateArray())
-                    {
-                        var evaluator = new JsonElementExpressionEvaluator(element);
-                        var isMatch = evaluator.Evaluate(_clientPredicate);
-
-                        if (isMatch)
-                        {
-                            var item = element.Deserialize<T>();
-                            if (item != null)
-                            {
-                                records.Add(item);
-                                if (_takeCount.HasValue && records.Count >= _takeCount.Value)
-                                    break;
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    // No client predicate -> deserialize all
-                    var chunk = valueElement.Deserialize<List<T>>() ?? [];
-                    records.AddRange(chunk);
-                }
+                records.Add(item);
+                if (_clientPredicate != null
+                    && _takeCount.HasValue
+                    && records.Count >= _takeCount.Value)
+                    break;
             }
 
             _logger.LogDebug("Fetched chunk (total collected {Count})", records.Count);
-            currentUrl = nextUrl;
+            currentUrl = page.NextLink;
         }
 
         _logger.LogInformation("All pages fetched: {Count} records total", records.Count);
@@ -717,29 +697,13 @@ public class D365Query<T>
             if (!string.IsNullOrWhiteSpace(_criteria))
                 queryParts.Add(_criteria);
 
-            var currentUrl = $"{_entity}?{string.Join("&", queryParts)}";
+            string? currentUrl = BuildUrl(queryParts);
 
             while (!string.IsNullOrEmpty(currentUrl))
             {
-                var (nextUrl, jsonDocument, _) = await GetResponseJsonDocumentAsync(currentUrl, cancellationToken);
-
-                if (jsonDocument is null) break;
-
-                using var doc = jsonDocument;
-                if (doc.RootElement.TryGetProperty("value", out JsonElement valueElement) &&
-                    valueElement.ValueKind == JsonValueKind.Array)
-                {
-                    foreach (var element in valueElement.EnumerateArray())
-                    {
-                        var evaluator = new JsonElementExpressionEvaluator(element);
-                        if (evaluator.Evaluate(_clientPredicate))
-                        {
-                            count++;
-                        }
-                    }
-                }
-
-                currentUrl = nextUrl;
+                var page = await GetPageAsync(currentUrl, cancellationToken).ConfigureAwait(false);
+                count = checked(count + page.Records.Count);
+                currentUrl = page.NextLink;
             }
 
             return count;
@@ -761,84 +725,172 @@ public class D365Query<T>
             // Force Top=0 to minimize payload
             queryParts.Add("$top=0");
 
-            var baseUrl = $"{_entity}?{string.Join("&", queryParts)}";
-
-            var (_, _, count) = await GetResponseJsonDocumentAsync(baseUrl, cancellationToken);
-
-            return count ?? 0;
+            var page = await GetPageAsync(BuildUrl(queryParts), cancellationToken).ConfigureAwait(false);
+            return page.Count.HasValue ? checked((int)page.Count.Value) : 0;
         }
     }
 
     #region Private Helpers
 
-    private async Task<(string NextUrl, JsonDocument? JsonDocumentResult, int? TotalCount)> GetResponseJsonDocumentAsync(
+    private async Task<ODataCollectionPage<T>> GetPageAsync(
         string url,
         CancellationToken cancellationToken = default)
     {
+        var request = new D365Request(
+            HttpMethod.Get,
+            url,
+            null,
+            _entity,
+            new Dictionary<string, string>(_headerExtension, StringComparer.OrdinalIgnoreCase));
+        var response = await _transport
+            .SendEnsuredAsync(request, cancellationToken)
+            .ConfigureAwait(false);
+
+        return DeserializePage(response);
+    }
+
+    private ODataCollectionPage<T> DeserializePage(D365Response response)
+    {
+        JsonDocument document;
         try
         {
-            _logger.LogDebug("Fetching: {Url}", GetFullUrl(url));
+            document = JsonDocument.Parse(response.RawBody);
+        }
+        catch (JsonException exception)
+        {
+            throw CreateSerializationException(
+                "The D365 response body is not valid JSON.",
+                response,
+                exception);
+        }
 
-            var httpClient = _httpClientFactory.CreateClient(_options.HttpClientName);
-            var request = await CreateHttpRequestMessageAsync(HttpMethod.Get, url);
-            var response = await httpClient.SendAsync(request, cancellationToken);
+        using (document)
+        {
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+                throw CreateProtocolException("The D365 response must be a JSON object.", response);
+            if (root.TryGetProperty("error", out _))
+                throw CreateProtocolException("A successful D365 response contained an error envelope.", response);
+            if (!root.TryGetProperty("value", out var valueElement))
+                throw CreateProtocolException("The D365 collection response is missing the 'value' property.", response);
+            if (valueElement.ValueKind != JsonValueKind.Array)
+                throw CreateProtocolException("The D365 collection response 'value' property must be an array.", response);
 
-            if (!response.IsSuccessStatusCode)
+            var records = new List<T>();
+            foreach (var element in valueElement.EnumerateArray())
             {
-                if (response.StatusCode == HttpStatusCode.Unauthorized)
+                if (_clientPredicate is not null)
                 {
-                    _logger.LogWarning("Unauthorized - retrying after token refresh...");
-                    return (string.Empty, null, null);
+                    var evaluator = new JsonElementExpressionEvaluator(element);
+                    if (!evaluator.Evaluate(_clientPredicate))
+                        continue;
                 }
 
-                _logger.LogError("Error fetching data: {StatusCode}", response.StatusCode);
-                return (string.Empty, null, null);
+                try
+                {
+                    var item = element.Deserialize<T>();
+                    if (item is null)
+                    {
+                        throw CreateSerializationException(
+                            "A D365 collection record deserialized to null.",
+                            response);
+                    }
+
+                    records.Add(item);
+                }
+                catch (D365SerializationException)
+                {
+                    throw;
+                }
+                catch (Exception exception) when (exception is JsonException or NotSupportedException)
+                {
+                    throw CreateSerializationException(
+                        $"A D365 collection record could not be deserialized as {typeof(T).Name}.",
+                        response,
+                        exception);
+                }
             }
 
-            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-            var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
-            var nextLink = ExtractNextLink(doc.RootElement);
-            var countNumber = ExtractCountFromContent(doc.RootElement);
-
-            return (nextLink, doc, countNumber);
+            var nextLink = ReadNextLink(root, response);
+            var count = ReadCount(root, response);
+            return new ODataCollectionPage<T>(records, nextLink, count);
         }
-        catch (HttpRequestException ex)
-        {
-            _logger.LogError(ex, "HTTP error");
-            if (ex.InnerException is SocketException socketEx)
-            {
-                _logger.LogError("Socket error code: {ErrorCode}", socketEx.SocketErrorCode);
-            }
-        }
-        catch (Exception e)
-        {
-            _logger.LogError(e, "Error fetching data");
-        }
-
-        return (string.Empty, null, null);
     }
 
-    private static string ExtractNextLink(JsonElement root)
+    private static string? ReadNextLink(JsonElement root, D365Response response)
     {
-        if (root.TryGetProperty("@odata.nextLink", out var nextLink))
-            return nextLink.GetString() ?? string.Empty;
+        if (!root.TryGetProperty("@odata.nextLink", out var nextLink))
+            return null;
+        if (nextLink.ValueKind == JsonValueKind.Null)
+            return null;
+        if (nextLink.ValueKind != JsonValueKind.String)
+            throw CreateProtocolException("The '@odata.nextLink' property must be a string.", response);
 
-        return string.Empty;
+        var value = nextLink.GetString();
+        return string.IsNullOrWhiteSpace(value) ? null : value;
     }
 
-    private static int ExtractCountFromContent(JsonElement root)
+    private static long? ReadCount(JsonElement root, D365Response response)
     {
-        try
+        if (!root.TryGetProperty("@odata.count", out var count))
+            return null;
+        if (count.ValueKind == JsonValueKind.Number && count.TryGetInt64(out var number))
+            return number;
+        if (count.ValueKind == JsonValueKind.String
+            && long.TryParse(count.GetString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out number))
         {
-            if (root.TryGetProperty("@odata.count", out var countElement))
-                return countElement.GetInt32();
-        }
-        catch (Exception)
-        {
-            // Ignore count extraction errors
+            return number;
         }
 
-        return -1;
+        throw CreateProtocolException("The '@odata.count' property must be a 64-bit integer.", response);
+    }
+
+    private static D365SerializationException CreateSerializationException(
+        string message,
+        D365Response response,
+        Exception? innerException = null)
+    {
+        return new D365SerializationException(
+            message,
+            response.StatusCode,
+            HttpMethod.Get,
+            response.RequestUri,
+            responseBody: response.RawBody,
+            requestId: response.RequestId,
+            innerException: innerException);
+    }
+
+    private static D365ProtocolException CreateProtocolException(
+        string message,
+        D365Response response)
+    {
+        return new D365ProtocolException(
+            message,
+            response.StatusCode,
+            HttpMethod.Get,
+            response.RequestUri,
+            responseBody: response.RawBody,
+            requestId: response.RequestId);
+    }
+
+    private string BuildReadUrl(bool includeServerTop)
+    {
+        var queryParts = new List<string>();
+        if (_crossCompany)
+            queryParts.Add("cross-company=true");
+        if (!string.IsNullOrWhiteSpace(_criteria))
+            queryParts.Add(_criteria);
+        if (includeServerTop && _clientPredicate is null && _takeCount.HasValue)
+            queryParts.Add($"$top={_takeCount}");
+
+        return BuildUrl(queryParts);
+    }
+
+    private string BuildUrl(IReadOnlyCollection<string> queryParts)
+    {
+        return queryParts.Count == 0
+            ? _entity
+            : $"{_entity}?{string.Join("&", queryParts)}";
     }
 
     private void AppendOrderBy(string property, string direction)

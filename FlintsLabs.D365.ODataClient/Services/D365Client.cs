@@ -33,7 +33,8 @@ internal sealed class D365Client(
             logger,
             tokenProvider,
             entity,
-            options);
+            options,
+            transport);
     }
 
     public D365Query<T> Entity<T>(Enum entity)
