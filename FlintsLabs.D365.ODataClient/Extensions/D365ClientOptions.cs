@@ -212,6 +212,14 @@ public class D365ClientBuilder
 /// </summary>
 public class D365ClientOptions
 {
+    public TimeSpan RequestTimeout { get; set; } = TimeSpan.FromSeconds(100);
+
+    public int MaxErrorBodyBytes { get; set; } = 64 * 1024;
+
+    public int MaxPages { get; set; } = 10_000;
+
+    public D365RetryOptions Retry { get; set; } = new();
+
     /// <summary>
     /// Authentication type: AzureAD or ADFS
     /// Default: AzureAD
