@@ -1,9 +1,6 @@
 using System.Linq.Expressions;
-using System.Net.Http.Headers;
-using System.Net.Mime;
 using System.Reflection;
 using System.Globalization;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using FlintsLabs.D365.ODataClient.Attributes;
@@ -22,9 +19,7 @@ namespace FlintsLabs.D365.ODataClient.Services;
 /// </summary>
 public class D365Query<T>
 {
-    private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger _logger;
-    private readonly ID365AccessTokenProvider _tokenProvider;
     private readonly ID365Transport _transport;
     private readonly D365ClientOptions _options;
     private readonly string _entity;
@@ -74,9 +69,7 @@ public class D365Query<T>
         D365ClientOptions options,
         ID365Transport transport)
     {
-        _httpClientFactory = factory;
         _logger = logger;
-        _tokenProvider = tokenProvider;
         _entity = entity;
         _options = options;
         _transport = transport;
@@ -111,45 +104,12 @@ public class D365Query<T>
         return this;
     }
 
-    private async Task<HttpRequestMessage> CreateHttpRequestMessageAsync(HttpMethod method, string url)
-    {
-        var token = await _tokenProvider.GetAccessTokenAsync();
-
-        var request = new HttpRequestMessage(method, url);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token.Value);
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(MediaTypeNames.Application.Json));
-
-        // Add extension headers
-        foreach (var header in _headerExtension)
-        {
-            request.Headers.TryAddWithoutValidation(header.Key, header.Value);
-        }
-
-        _logger.LogInformation("Sending D365 Request: {Method} {Url}", method, url);
-        foreach (var header in request.Headers)
-        {
-            _logger.LogDebug("Header: {Key}={Value}", header.Key, MaskHeaderValue(header.Key, header.Value));
-        }
-
-        return request;
-    }
-
     /// <summary>
     /// Get full absolute URL for logging
     /// </summary>
     private string GetFullUrl(string relativeUrl)
     {
         return $"{_options.GetBaseUrl()}{relativeUrl}";
-    }
-
-    private static string MaskHeaderValue(string key, IEnumerable<string> values)
-    {
-        if (string.Equals(key, "Authorization", StringComparison.OrdinalIgnoreCase))
-        {
-            return "Bearer ***";
-        }
-
-        return string.Join(",", values);
     }
 
     #endregion
@@ -401,157 +361,90 @@ public class D365Query<T>
     /// <summary>
     /// Create a new record (POST)
     /// </summary>
-    public async Task<string> AddAsync(T obj)
+    public Task<D365Response> AddAsync(
+        T obj,
+        CancellationToken cancellationToken = default)
     {
         var url = _queryBuilder.Build(_entity, _crossCompany);
-        var json = JsonSerializer.Serialize(obj, DefaultSerializerOptions);
-
-        _logger.LogInformation("D365 POST: {Url}", GetFullUrl(url));
-        _logger.LogDebug("Request Body: {Body}", json);
-
-        var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
-        var httpClient = _httpClientFactory.CreateClient(_options.HttpClientName);
-
-        var request = await CreateHttpRequestMessageAsync(HttpMethod.Post, url);
-        request.Content = content;
-
-        var response = await httpClient.SendAsync(request);
-        var result = await response.Content.ReadAsStringAsync();
-
-        if (!response.IsSuccessStatusCode)
-        {
-            _logger.LogError("POST failed: {StatusCode} - {Result}", response.StatusCode, result);
-            return result;
-        }
-
-        _logger.LogDebug("Record created successfully.");
-        return result;
+        return SendMutationAsync(HttpMethod.Post, url, obj, cancellationToken);
     }
 
     /// <summary>
     /// Create a new record with anonymous object (POST)
     /// </summary>
-    public async Task<string> AddAsync(object obj)
+    public Task<D365Response> AddAsync(
+        object obj,
+        CancellationToken cancellationToken = default)
     {
         var url = _queryBuilder.Build(_entity, _crossCompany);
-
-        var json = JsonSerializer.Serialize(obj, DefaultSerializerOptions);
-
-        _logger.LogInformation("D365 POST: {Url}", GetFullUrl(url));
-        _logger.LogDebug("Request Body: {Body}", json);
-
-        var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
-        var httpClient = _httpClientFactory.CreateClient(_options.HttpClientName);
-
-        var request = await CreateHttpRequestMessageAsync(HttpMethod.Post, url);
-        request.Content = content;
-
-        var response = await httpClient.SendAsync(request);
-        var result = await response.Content.ReadAsStringAsync();
-
-        if (!response.IsSuccessStatusCode)
-        {
-            _logger.LogError("POST failed: {StatusCode} - {Result}", response.StatusCode, result);
-            return result;
-        }
-
-        _logger.LogDebug("Record created successfully.");
-        return result;
+        return SendMutationAsync(HttpMethod.Post, url, obj, cancellationToken);
     }
 
     /// <summary>
     /// Create a new record and parse response to typed object
     /// </summary>
-    public async Task<T1> AddAsync<T1>(object obj)
+    public async Task<D365Response<TResponse>> AddAsync<TResponse>(
+        object obj,
+        CancellationToken cancellationToken = default)
     {
         var url = _queryBuilder.Build(_entity, _crossCompany);
+        var response = await SendMutationAsync(
+                HttpMethod.Post,
+                url,
+                obj,
+                cancellationToken)
+            .ConfigureAwait(false);
 
-        var json = JsonSerializer.Serialize(obj, DefaultSerializerOptions);
-
-        _logger.LogInformation("D365 POST: {Url}", GetFullUrl(url));
-        _logger.LogDebug("Request Body: {Body}", json);
-
-        var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
-        var httpClient = _httpClientFactory.CreateClient(_options.HttpClientName);
-
-        var request = await CreateHttpRequestMessageAsync(HttpMethod.Post, url);
-        request.Content = content;
-
-        var response = await httpClient.SendAsync(request);
-        var result = await response.Content.ReadAsStringAsync();
-
-        if (!response.IsSuccessStatusCode)
-        {
-            _logger.LogError("POST failed: {StatusCode} - {Result}", response.StatusCode, result);
-            if (typeof(T1) == typeof(string))
-                return (T1)(object)result;
-            return default!;
-        }
-
-        _logger.LogDebug("Record created successfully.");
+        if (string.IsNullOrWhiteSpace(response.RawBody))
+            throw D365ProtocolException.EmptyTypedMutationBody(response);
 
         try
         {
-            var deserialized = JsonSerializer.Deserialize<T1>(result);
-            if (deserialized is null)
-            {
-                if (typeof(T1) == typeof(string))
-                    return (T1)(object)result;
-                return default!;
-            }
+            var value = JsonSerializer.Deserialize<TResponse>(
+                response.RawBody,
+                DefaultSerializerOptions);
+            if (value is null)
+                throw D365ProtocolException.EmptyTypedMutationValue(response);
 
-            return deserialized;
+            return new D365Response<TResponse>(
+                response.StatusCode,
+                value,
+                response.RawBody,
+                response.Headers,
+                response.RequestUri,
+                response.RequestId,
+                response.MutationOutcome);
         }
-        catch (Exception ex)
+        catch (D365ProtocolException)
         {
-            _logger.LogError(ex, "Deserialization failed");
-            if (typeof(T1) == typeof(string))
-                return (T1)(object)result;
-            return default!;
+            throw;
+        }
+        catch (Exception exception) when (exception is JsonException or NotSupportedException)
+        {
+            throw D365SerializationException.ForSuccessfulMutation(response, exception);
         }
     }
 
     /// <summary>
     /// Update record using identities added via AddIdentity (PATCH)
     /// </summary>
-    public async Task<string> UpdateAsync(T obj)
+    public Task<D365Response> UpdateAsync(
+        T obj,
+        CancellationToken cancellationToken = default)
     {
         EnsureIdentitiesForWrite();
-
-        var identityClause = string.Join(",", _identities.Select(kvp =>
-            kvp.Value is string str ? $"{kvp.Key}='{str.Replace("'", "''")}'"
-            : kvp.Value is DateTime dt ? $"{kvp.Key}={dt:s}Z"
-            : $"{kvp.Key}={kvp.Value}"));
-
+        var identityClause = BuildIdentityClause();
         var url = _queryBuilder.Build($"{_entity}({identityClause})", _crossCompany);
-
-        var json = JsonSerializer.Serialize(obj, DefaultSerializerOptions);
-
-        _logger.LogInformation("D365 PATCH: {Url}", GetFullUrl(url));
-        _logger.LogDebug("Request Body: {Body}", json);
-
-        var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
-        var httpClient = _httpClientFactory.CreateClient(_options.HttpClientName);
-        var request = await CreateHttpRequestMessageAsync(HttpMethod.Patch, url);
-        request.Content = content;
-
-        var response = await httpClient.SendAsync(request);
-        var result = await response.Content.ReadAsStringAsync();
-
-        if (!response.IsSuccessStatusCode)
-        {
-            _logger.LogError("PATCH failed: {StatusCode} - {Result}", response.StatusCode, result);
-            return result;
-        }
-
-        _logger.LogDebug("Record updated successfully.");
-        return result;
+        return SendMutationAsync(HttpMethod.Patch, url, obj, cancellationToken);
     }
 
     /// <summary>
     /// Update record with anonymous key object (PATCH)
     /// </summary>
-    public async Task<string> UpdateAsync(object keys, T obj)
+    public Task<D365Response> UpdateAsync(
+        object keys,
+        T obj,
+        CancellationToken cancellationToken = default)
     {
         if (keys is null)
             throw new ArgumentNullException(nameof(keys));
@@ -566,73 +459,32 @@ public class D365Query<T>
                 _identities[prop.Name] = val;
         }
 
-        return await UpdateAsync(obj);
+        return UpdateAsync(obj, cancellationToken);
     }
 
     /// <summary>
     /// Update record with anonymous object body (partial update via PATCH)
     /// </summary>
-    public async Task<string> UpdateAsync(object partialObject)
+    public Task<D365Response> UpdateAsync(
+        object partialObject,
+        CancellationToken cancellationToken = default)
     {
         EnsureIdentitiesForWrite();
-
-        var identityClause = string.Join(",", _identities.Select(kvp =>
-            kvp.Value is string ? $"{kvp.Key}='{kvp.Value}'" : $"{kvp.Key}={kvp.Value}"));
-
+        var identityClause = BuildIdentityClause();
         var url = _queryBuilder.Build($"{_entity}({identityClause})", _crossCompany);
-
-        var json = JsonSerializer.Serialize(partialObject, DefaultSerializerOptions);
-
-        _logger.LogInformation("D365 PATCH: {Url}", GetFullUrl(url));
-        _logger.LogDebug("Request Body: {Body}", json);
-
-        var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
-        var httpClient = _httpClientFactory.CreateClient(_options.HttpClientName);
-        var request = await CreateHttpRequestMessageAsync(HttpMethod.Patch, url);
-        request.Content = content;
-
-        var response = await httpClient.SendAsync(request);
-        var result = await response.Content.ReadAsStringAsync();
-
-        if (!response.IsSuccessStatusCode)
-        {
-            _logger.LogError("PATCH failed: {StatusCode} - {Result}", response.StatusCode, result);
-            return result;
-        }
-
-        _logger.LogDebug("Record updated successfully.");
-        return result;
+        return SendMutationAsync(HttpMethod.Patch, url, partialObject, cancellationToken);
     }
 
     /// <summary>
     /// Delete record (DELETE)
     /// </summary>
-    public async Task<string> DeleteAsync()
+    public Task<D365Response> DeleteAsync(
+        CancellationToken cancellationToken = default)
     {
         EnsureIdentitiesForWrite();
-
-        var identityClause = string.Join(",", _identities.Select(kvp =>
-            kvp.Value is string str ? $"{kvp.Key}='{str.Replace("'", "''")}'"
-            : kvp.Value is DateTime dt ? $"{kvp.Key}={dt:s}Z"
-            : $"{kvp.Key}={kvp.Value}"));
-
+        var identityClause = BuildIdentityClause();
         var url = _queryBuilder.Build($"{_entity}({identityClause})", _crossCompany);
-
-        _logger.LogInformation("D365 DELETE: {Url}", GetFullUrl(url));
-
-        var httpClient = _httpClientFactory.CreateClient(_options.HttpClientName);
-        var request = await CreateHttpRequestMessageAsync(HttpMethod.Delete, url);
-        var response = await httpClient.SendAsync(request);
-        var result = await response.Content.ReadAsStringAsync();
-
-        if (!response.IsSuccessStatusCode)
-        {
-            _logger.LogError("DELETE failed: {StatusCode} - {Result}", response.StatusCode, result);
-            return result;
-        }
-
-        _logger.LogDebug("Record deleted successfully.");
-        return result;
+        return SendMutationAsync(HttpMethod.Delete, url, null, cancellationToken);
     }
 
     /// <summary>
@@ -697,6 +549,31 @@ public class D365Query<T>
     }
 
     #region Private Helpers
+
+    private Task<D365Response> SendMutationAsync(
+        HttpMethod method,
+        string url,
+        object? payload,
+        CancellationToken cancellationToken)
+    {
+        var json = method == HttpMethod.Delete
+            ? null
+            : JsonSerializer.Serialize(payload, DefaultSerializerOptions);
+        var request = new D365Request(
+            method,
+            url,
+            json,
+            _entity,
+            new Dictionary<string, string>(_headerExtension, StringComparer.OrdinalIgnoreCase));
+
+        return _transport.SendEnsuredAsync(request, cancellationToken);
+    }
+
+    private string BuildIdentityClause()
+    {
+        return string.Join(",", _identities.Select(identity =>
+            $"{identity.Key}={ODataLiteralFormatter.Format(identity.Value, _options.BooleanFormatting)}"));
+    }
 
     private async Task<ODataCollectionPage<T>> GetPageAsync(
         string url,

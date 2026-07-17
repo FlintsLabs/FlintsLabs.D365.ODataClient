@@ -24,6 +24,7 @@ public class KeyWhereUpdateTests
     {
         // Arrange
         HttpRequestMessage? captured = null;
+        string? capturedBody = null;
         var handlerMock = new Mock<HttpMessageHandler>();
         handlerMock.Protected()
             .Setup<Task<HttpResponseMessage>>(
@@ -31,7 +32,11 @@ public class KeyWhereUpdateTests
                 ItExpr.IsAny<HttpRequestMessage>(),
                 ItExpr.IsAny<CancellationToken>()
             )
-            .Callback<HttpRequestMessage, CancellationToken>((req, _) => captured = req)
+            .Callback<HttpRequestMessage, CancellationToken>((req, _) =>
+            {
+                captured = req;
+                capturedBody = req.Content?.ReadAsStringAsync().GetAwaiter().GetResult();
+            })
             .ReturnsAsync(new HttpResponseMessage
             {
                 StatusCode = HttpStatusCode.NoContent,
@@ -80,7 +85,6 @@ public class KeyWhereUpdateTests
             "https://org782e707f.api.crm5.dynamics.com/api/data/v9.2/rvl_egrheadeths(rvl_egrheadethid=20136305-68d1-ef11-8ee9-000d3aa08849)",
             captured.RequestUri!.ToString());
 
-        var body = await captured.Content!.ReadAsStringAsync();
-        Assert.Equal("{\"rvl_wmsstatus\":false}", body);
+        Assert.Equal("{\"rvl_wmsstatus\":false}", capturedBody);
     }
 }

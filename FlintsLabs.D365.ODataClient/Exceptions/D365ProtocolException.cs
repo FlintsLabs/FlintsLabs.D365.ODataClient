@@ -40,4 +40,28 @@ public sealed class D365ProtocolException : D365Exception
             requestId: response.RequestId,
             mutationOutcome: D365MutationOutcome.NotApplicable);
     }
+
+    internal static D365ProtocolException EmptyTypedMutationBody(D365Response response)
+    {
+        return new D365ProtocolException(
+            "The successful D365 mutation response did not contain a body required for typed deserialization.",
+            response.StatusCode,
+            HttpMethod.Post,
+            response.RequestUri,
+            responseBody: response.RawBody,
+            requestId: response.RequestId,
+            mutationOutcome: response.MutationOutcome);
+    }
+
+    internal static D365ProtocolException EmptyTypedMutationValue(D365Response response)
+    {
+        return new D365ProtocolException(
+            "The successful D365 mutation response deserialized to null.",
+            response.StatusCode,
+            HttpMethod.Post,
+            response.RequestUri,
+            responseBody: response.RawBody,
+            requestId: response.RequestId,
+            mutationOutcome: response.MutationOutcome);
+    }
 }

@@ -28,4 +28,19 @@ public sealed class D365SerializationException : D365Exception
             innerException: innerException)
     {
     }
+
+    internal static D365SerializationException ForSuccessfulMutation(
+        D365Response response,
+        Exception innerException)
+    {
+        return new D365SerializationException(
+            "The successful D365 mutation response could not be deserialized.",
+            response.StatusCode,
+            HttpMethod.Post,
+            response.RequestUri,
+            responseBody: response.RawBody,
+            requestId: response.RequestId,
+            mutationOutcome: response.MutationOutcome,
+            innerException: innerException);
+    }
 }
