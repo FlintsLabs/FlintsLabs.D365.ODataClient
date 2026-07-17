@@ -28,4 +28,16 @@ public sealed class D365ProtocolException : D365Exception
             innerException: innerException)
     {
     }
+
+    internal static D365ProtocolException MissingOrInvalidCount(D365Response response)
+    {
+        return new D365ProtocolException(
+            "The D365 response is missing a valid non-negative 64-bit '@odata.count' value.",
+            response.StatusCode,
+            HttpMethod.Get,
+            response.RequestUri,
+            responseBody: response.RawBody,
+            requestId: response.RequestId,
+            mutationOutcome: D365MutationOutcome.NotApplicable);
+    }
 }

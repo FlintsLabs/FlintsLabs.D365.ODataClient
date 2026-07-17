@@ -701,10 +701,17 @@ public class D365Query<T>
     /// </summary>
     public async Task<int> CountAsync(CancellationToken cancellationToken = default)
     {
-        // CASE 1: Client-side filtering is active
+        return checked((int)await LongCountAsync(cancellationToken).ConfigureAwait(false));
+    }
+
+    /// <summary>
+    /// Get a 64-bit count of matching records.
+    /// </summary>
+    public async Task<long> LongCountAsync(CancellationToken cancellationToken = default)
+    {
         if (_clientPredicate != null)
         {
-            var count = 0;
+            long count = 0;
             var queryParts = new List<string>();
             if (_crossCompany)
                 queryParts.Add("cross-company=true");
@@ -742,7 +749,6 @@ public class D365Query<T>
         }
         else
         {
-            // CASE 2: Server-side filtering only (Fast Path)
             var queryParts = new List<string>();
             if (_crossCompany)
                 queryParts.Add("cross-company=true");
@@ -750,15 +756,17 @@ public class D365Query<T>
             if (!string.IsNullOrWhiteSpace(_criteria))
                 queryParts.Add(_criteria);
 
-            // Force Count=true if not present
             if (!queryParts.Any(x => x.Contains("$count=true", StringComparison.OrdinalIgnoreCase)))
                 queryParts.Add("$count=true");
 
-            // Force Top=0 to minimize payload
             queryParts.Add("$top=0");
 
-            var page = await GetPageAsync(BuildUrl(queryParts), cancellationToken).ConfigureAwait(false);
-            return page.Count.HasValue ? checked((int)page.Count.Value) : 0;
+            var page = await GetPageAsync(
+                    BuildUrl(queryParts),
+                    cancellationToken,
+                    requireCount: true)
+                .ConfigureAwait(false);
+            return page.Count!.Value;
         }
     }
 
@@ -766,7 +774,8 @@ public class D365Query<T>
 
     private async Task<ODataCollectionPage<T>> GetPageAsync(
         string url,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool requireCount = false)
     {
         var request = new D365Request(
             HttpMethod.Get,
@@ -778,10 +787,12 @@ public class D365Query<T>
             .SendEnsuredAsync(request, cancellationToken)
             .ConfigureAwait(false);
 
-        return DeserializePage(response);
+        return DeserializePage(response, requireCount);
     }
 
-    private ODataCollectionPage<T> DeserializePage(D365Response response)
+    private ODataCollectionPage<T> DeserializePage(
+        D365Response response,
+        bool requireCount)
     {
         JsonDocument document;
         try
@@ -844,7 +855,7 @@ public class D365Query<T>
             }
 
             var nextLink = ReadNextLink(root, response);
-            var count = ReadCount(root, response);
+            var count = ReadCount(root, response, requireCount);
             return new ODataCollectionPage<T>(records, nextLink, count);
         }
     }
@@ -862,19 +873,26 @@ public class D365Query<T>
         return string.IsNullOrWhiteSpace(value) ? null : value;
     }
 
-    private static long? ReadCount(JsonElement root, D365Response response)
+    private static long? ReadCount(
+        JsonElement root,
+        D365Response response,
+        bool required)
     {
         if (!root.TryGetProperty("@odata.count", out var count))
+        {
+            if (required)
+                throw D365ProtocolException.MissingOrInvalidCount(response);
             return null;
-        if (count.ValueKind == JsonValueKind.Number && count.TryGetInt64(out var number))
-            return number;
-        if (count.ValueKind == JsonValueKind.String
-            && long.TryParse(count.GetString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out number))
+        }
+
+        if (count.ValueKind == JsonValueKind.Number
+            && count.TryGetInt64(out var number)
+            && number >= 0)
         {
             return number;
         }
 
-        throw CreateProtocolException("The '@odata.count' property must be a 64-bit integer.", response);
+        throw D365ProtocolException.MissingOrInvalidCount(response);
     }
 
     private static D365SerializationException CreateSerializationException(

@@ -24,6 +24,8 @@ public class JsonElementExpressionEvaluator
     {
         var result = Visit(expression);
         if (result is bool b) return b;
+        if (result is JsonElement { ValueKind: JsonValueKind.True or JsonValueKind.False } element)
+            return element.GetBoolean();
         throw new InvalidOperationException("Expression must return a boolean result.");
     }
 
