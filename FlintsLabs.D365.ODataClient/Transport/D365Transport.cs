@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Text;
 using FlintsLabs.D365.ODataClient.Exceptions;
@@ -27,12 +28,18 @@ internal sealed class D365Transport(
         D365Request request,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(request);
+        if (options.Retry is null)
+            throw new InvalidOperationException("D365 Retry options are not configured.");
+        options.Retry.Validate();
+
         if (cancellationToken.IsCancellationRequested)
             throw CreateCancellationException(request, false, cancellationToken, null);
 
         var httpClient = httpClientFactory.CreateClient(options.HttpClientName);
         var requestUri = ResolveRequestUri(httpClient, request.RelativeOrAbsoluteUrl);
         var sendStarted = false;
+        var operationTimer = Stopwatch.StartNew();
 
         try
         {
@@ -41,37 +48,91 @@ internal sealed class D365Transport(
                 .ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
 
-            sendStarted = true;
-            var response = await SendAttemptAsync(
-                    httpClient,
-                    request,
-                    accessToken.Value,
-                    requestUri,
-                    cancellationToken)
-                .ConfigureAwait(false);
-            if (response.StatusCode != HttpStatusCode.Unauthorized)
+            var completedReadRetries = 0;
+            var authenticationRetried = false;
+            while (true)
+            {
+                D365Response response;
+                try
+                {
+                    sendStarted = true;
+                    response = await SendAttemptAsync(
+                            httpClient,
+                            request,
+                            accessToken.Value,
+                            requestUri,
+                            cancellationToken)
+                        .ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (
+                    !cancellationToken.IsCancellationRequested
+                    && D365RetryPolicy.CanRetryRead(request, completedReadRetries, options.Retry))
+                {
+                    completedReadRetries++;
+                    await DelayForRetryAsync(
+                            request,
+                            completedReadRetries,
+                            EmptyHeaders,
+                            "timeout",
+                            cancellationToken)
+                        .ConfigureAwait(false);
+                    continue;
+                }
+                catch (Exception exception) when (
+                    exception is HttpRequestException or IOException
+                    && D365RetryPolicy.CanRetryRead(request, completedReadRetries, options.Retry))
+                {
+                    completedReadRetries++;
+                    await DelayForRetryAsync(
+                            request,
+                            completedReadRetries,
+                            EmptyHeaders,
+                            "transport",
+                            cancellationToken)
+                        .ConfigureAwait(false);
+                    continue;
+                }
+
+                if (response.StatusCode == HttpStatusCode.Unauthorized && !authenticationRetried)
+                {
+                    authenticationRetried = true;
+                    accessToken = await tokenProvider
+                        .RefreshAccessTokenAsync(accessToken.Value, cancellationToken)
+                        .ConfigureAwait(false);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    continue;
+                }
+
+                if (D365RetryPolicy.IsRetryableStatus(response.StatusCode)
+                    && D365RetryPolicy.CanRetryRead(request, completedReadRetries, options.Retry))
+                {
+                    completedReadRetries++;
+                    await DelayForRetryAsync(
+                            request,
+                            completedReadRetries,
+                            response.Headers,
+                            $"HTTP {(int)response.StatusCode}",
+                            cancellationToken)
+                        .ConfigureAwait(false);
+                    continue;
+                }
+
                 return response;
-
-            accessToken = await tokenProvider
-                .RefreshAccessTokenAsync(accessToken.Value, cancellationToken)
-                .ConfigureAwait(false);
-            cancellationToken.ThrowIfCancellationRequested();
-
-            return await SendAttemptAsync(
-                    httpClient,
-                    request,
-                    accessToken.Value,
-                    requestUri,
-                    cancellationToken)
-                .ConfigureAwait(false);
+            }
         }
         catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested)
         {
-            throw CreateCancellationException(request, sendStarted, cancellationToken, exception);
+            var cancellationException = CreateCancellationException(
+                request,
+                sendStarted,
+                cancellationToken,
+                exception);
+            TryLogFailure(request, cancellationException, operationTimer.Elapsed);
+            throw cancellationException;
         }
         catch (OperationCanceledException exception)
         {
-            throw new D365TransportException(
+            var transportException = new D365TransportException(
                 $"D365 {request.Method} request timed out after {options.RequestTimeout}.",
                 D365FailureKind.Timeout,
                 request.Method,
@@ -79,10 +140,12 @@ internal sealed class D365Transport(
                 request.EntityName,
                 mutationOutcome: TransportFailureOutcome(request, sendStarted),
                 innerException: exception);
+            TryLogFailure(request, transportException, operationTimer.Elapsed);
+            throw transportException;
         }
         catch (HttpRequestException exception)
         {
-            throw new D365TransportException(
+            var transportException = new D365TransportException(
                 $"D365 {request.Method} request failed before an HTTP response was received.",
                 D365FailureKind.Transport,
                 request.Method,
@@ -90,10 +153,12 @@ internal sealed class D365Transport(
                 request.EntityName,
                 mutationOutcome: TransportFailureOutcome(request, sendStarted),
                 innerException: exception);
+            TryLogFailure(request, transportException, operationTimer.Elapsed);
+            throw transportException;
         }
         catch (IOException exception)
         {
-            throw new D365TransportException(
+            var transportException = new D365TransportException(
                 $"D365 {request.Method} response could not be read.",
                 D365FailureKind.Transport,
                 request.Method,
@@ -101,7 +166,34 @@ internal sealed class D365Transport(
                 request.EntityName,
                 mutationOutcome: TransportFailureOutcome(request, sendStarted),
                 innerException: exception);
+            TryLogFailure(request, transportException, operationTimer.Elapsed);
+            throw transportException;
         }
+    }
+
+    private static readonly IReadOnlyDictionary<string, string[]> EmptyHeaders =
+        new Dictionary<string, string[]>();
+
+    private async Task DelayForRetryAsync(
+        D365Request request,
+        int retryNumber,
+        IReadOnlyDictionary<string, string[]> headers,
+        string reason,
+        CancellationToken cancellationToken)
+    {
+        var delay = D365RetryPolicy.CalculateDelay(
+            headers,
+            retryNumber,
+            options.Retry,
+            DateTimeOffset.UtcNow);
+        TryLog(() => logger.LogInformation(
+            "D365 {Method} {Entity} retry {RetryNumber} after {DelayMs} ms due to {Reason}",
+            request.Method,
+            request.EntityName,
+            retryNumber,
+            delay.TotalMilliseconds,
+            reason));
+        await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<D365Response> SendAttemptAsync(
@@ -111,6 +203,13 @@ internal sealed class D365Transport(
         Uri requestUri,
         CancellationToken cancellationToken)
     {
+        var attemptTimer = Stopwatch.StartNew();
+        TryLog(() => logger.LogDebug(
+            "D365 {Method} {Entity} route {Route}",
+            request.Method,
+            request.EntityName,
+            D365LogSanitizer.Sanitize(requestUri)));
+
         using var timeout = CreateTimeoutTokenSource(cancellationToken);
         using var message = request.CreateMessage(accessToken);
         using var response = await httpClient.SendAsync(
@@ -124,12 +223,17 @@ internal sealed class D365Transport(
         var headers = CaptureHeaders(response);
         var requestId = ExtractRequestId(headers);
         var mutationOutcome = ClassifyMutationOutcome(request, response.StatusCode);
+        var isTransient = D365HttpException.IsTransientStatus(response.StatusCode);
 
         TryLog(() => logger.LogInformation(
-            "D365 {Method} {Entity} completed with {StatusCode}",
+            "D365 {Method} {Entity} completed with {StatusCode} in {DurationMs} ms; RequestId={RequestId}; Transient={IsTransient}; MutationOutcome={MutationOutcome}",
             request.Method,
             request.EntityName,
-            response.StatusCode));
+            response.StatusCode,
+            attemptTimer.Elapsed.TotalMilliseconds,
+            requestId,
+            isTransient,
+            mutationOutcome));
 
         return new D365Response(
             response.StatusCode,
@@ -171,7 +275,7 @@ internal sealed class D365Transport(
     {
         var error = D365ErrorParser.Parse(response.RawBody);
         var responseBody = TruncateUtf8(response.RawBody, options.MaxErrorBodyBytes);
-        var retryAfter = ReadRetryAfter(response.Headers);
+        var retryAfter = D365RetryPolicy.ReadRetryAfter(response.Headers, DateTimeOffset.UtcNow);
         var message = error.Message is null
             ? $"D365 request failed with HTTP {(int)response.StatusCode} ({response.StatusCode})."
             : $"D365 request failed: {error.Message}";
@@ -223,19 +327,6 @@ internal sealed class D365Transport(
                 return values.FirstOrDefault();
         }
 
-        return null;
-    }
-
-    private static TimeSpan? ReadRetryAfter(IReadOnlyDictionary<string, string[]> headers)
-    {
-        if (!headers.TryGetValue("Retry-After", out var values))
-            return null;
-
-        var value = values.FirstOrDefault();
-        if (int.TryParse(value, out var seconds) && seconds >= 0)
-            return TimeSpan.FromSeconds(seconds);
-        if (DateTimeOffset.TryParse(value, out var date))
-            return date > DateTimeOffset.UtcNow ? date - DateTimeOffset.UtcNow : TimeSpan.Zero;
         return null;
     }
 
@@ -312,5 +403,33 @@ internal sealed class D365Transport(
         {
             // Logging must never replace request results or exceptions.
         }
+    }
+
+    private void TryLogFailure(
+        D365Request request,
+        D365TransportException exception,
+        TimeSpan duration)
+    {
+        TryLog(() => logger.LogWarning(
+            "D365 {Method} {Entity} failed after {DurationMs} ms; FailureKind={FailureKind}; Transient={IsTransient}; MutationOutcome={MutationOutcome}",
+            request.Method,
+            request.EntityName,
+            duration.TotalMilliseconds,
+            exception.FailureKind,
+            exception.IsTransient,
+            exception.MutationOutcome));
+    }
+
+    private void TryLogFailure(
+        D365Request request,
+        D365OperationCanceledException exception,
+        TimeSpan duration)
+    {
+        TryLog(() => logger.LogWarning(
+            "D365 {Method} {Entity} canceled after {DurationMs} ms; MutationOutcome={MutationOutcome}",
+            request.Method,
+            request.EntityName,
+            duration.TotalMilliseconds,
+            exception.MutationOutcome));
     }
 }

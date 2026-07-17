@@ -28,6 +28,9 @@ public static class ServiceCollectionExtensions
 
         var builder = new D365ClientBuilder();
         configure(builder);
+        if (builder.Options.Retry is null)
+            throw new InvalidOperationException("D365 Retry options are not configured.");
+        builder.Options.Retry.Validate();
 
         var snapshot = CloneOptions(builder.Options);
         snapshot.HttpClientName = $"D365Endpoint_{name}";

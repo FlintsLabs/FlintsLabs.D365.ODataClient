@@ -124,6 +124,16 @@ public class D365ClientBuilder
         Options.BooleanFormatting = formatting;
         return this;
     }
+
+    /// <summary>
+    /// Configure opt-in retry behavior for safe read requests.
+    /// </summary>
+    public D365ClientBuilder ConfigureRetry(Action<D365RetryOptions> configure)
+    {
+        ArgumentNullException.ThrowIfNull(configure);
+        configure(Options.Retry);
+        return this;
+    }
     
     /// <summary>
     /// Configure from IConfiguration section
@@ -145,6 +155,15 @@ public class D365ClientBuilder
         Options.GrantType = section["GrantType"] ?? "client_credentials";
 
         Options.Scope = section["Scope"];
+
+        if (int.TryParse(section["Retry:MaxReadRetries"], out var maxReadRetries))
+            Options.Retry.MaxReadRetries = maxReadRetries;
+        if (TimeSpan.TryParse(section["Retry:BaseDelay"], out var baseDelay))
+            Options.Retry.BaseDelay = baseDelay;
+        if (TimeSpan.TryParse(section["Retry:MaxDelay"], out var maxDelay))
+            Options.Retry.MaxDelay = maxDelay;
+        if (bool.TryParse(section["Retry:UseJitter"], out var useJitter))
+            Options.Retry.UseJitter = useJitter;
         
         // Boolean Formatting
         if (Enum.TryParse<D365BooleanFormatting>(section["BooleanFormatting"], true, out var boolFmt))

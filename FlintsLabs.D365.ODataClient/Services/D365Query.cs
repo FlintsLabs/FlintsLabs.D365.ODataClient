@@ -104,14 +104,6 @@ public class D365Query<T>
         return this;
     }
 
-    /// <summary>
-    /// Get full absolute URL for logging
-    /// </summary>
-    private string GetFullUrl(string relativeUrl)
-    {
-        return $"{_options.GetBaseUrl()}{relativeUrl}";
-    }
-
     #endregion
 
     /// <summary>
@@ -315,7 +307,6 @@ public class D365Query<T>
     public async Task<List<T>> ToListAsync(CancellationToken cancellationToken = default)
     {
         var baseUrl = BuildReadUrl(includeServerTop: true);
-        _logger.LogInformation("D365 GET: {Url}", GetFullUrl(baseUrl));
 
         var records = new List<T>();
         string? currentUrl = baseUrl;
@@ -344,7 +335,9 @@ public class D365Query<T>
                         break;
                 }
 
-                _logger.LogDebug("Fetched chunk (total collected {Count})", records.Count);
+                TryLog(() => _logger.LogDebug(
+                    "Fetched D365 page (total collected {Count})",
+                    records.Count));
                 currentUrl = page.NextLink;
             }
         }
@@ -354,7 +347,9 @@ public class D365Query<T>
             throw;
         }
 
-        _logger.LogInformation("All pages fetched: {Count} records total", records.Count);
+        TryLog(() => _logger.LogInformation(
+            "All D365 pages fetched: {Count} records total",
+            records.Count));
         return records;
     }
 
@@ -549,6 +544,18 @@ public class D365Query<T>
     }
 
     #region Private Helpers
+
+    private static void TryLog(Action log)
+    {
+        try
+        {
+            log();
+        }
+        catch
+        {
+            // Logging must not change query results or replace D365 failures.
+        }
+    }
 
     private Task<D365Response> SendMutationAsync(
         HttpMethod method,
