@@ -357,24 +357,39 @@ public class D365Query<T>
 
         var records = new List<T>();
         string? currentUrl = baseUrl;
+        var nextLinkValidator = new ODataNextLinkValidator(_options.GetBaseUrl());
+        var visitedPages = new HashSet<string>(StringComparer.Ordinal);
+        var pageCount = 0;
 
-        while (!string.IsNullOrEmpty(currentUrl))
+        try
         {
-            if (_clientPredicate != null && _takeCount.HasValue && records.Count >= _takeCount.Value)
-                break;
-
-            var page = await GetPageAsync(currentUrl, cancellationToken).ConfigureAwait(false);
-            foreach (var item in page.Records)
+            while (!string.IsNullOrEmpty(currentUrl))
             {
-                records.Add(item);
-                if (_clientPredicate != null
-                    && _takeCount.HasValue
-                    && records.Count >= _takeCount.Value)
+                if (_takeCount.HasValue && records.Count >= _takeCount.Value)
                     break;
-            }
+                EnsureCanFetchPage(pageCount);
 
-            _logger.LogDebug("Fetched chunk (total collected {Count})", records.Count);
-            currentUrl = page.NextLink;
+                var pageUri = nextLinkValidator.Resolve(currentUrl);
+                if (!visitedPages.Add(pageUri.AbsoluteUri))
+                    throw new D365ProtocolException("A loop was detected in D365 pagination links.");
+
+                var page = await GetPageAsync(pageUri.AbsoluteUri, cancellationToken).ConfigureAwait(false);
+                pageCount++;
+                foreach (var item in page.Records)
+                {
+                    records.Add(item);
+                    if (_takeCount.HasValue && records.Count >= _takeCount.Value)
+                        break;
+                }
+
+                _logger.LogDebug("Fetched chunk (total collected {Count})", records.Count);
+                currentUrl = page.NextLink;
+            }
+        }
+        catch (D365Exception exception)
+        {
+            exception.PartialRecordCount = records.Count;
+            throw;
         }
 
         _logger.LogInformation("All pages fetched: {Count} records total", records.Count);
@@ -698,12 +713,29 @@ public class D365Query<T>
                 queryParts.Add(_criteria);
 
             string? currentUrl = BuildUrl(queryParts);
+            var nextLinkValidator = new ODataNextLinkValidator(_options.GetBaseUrl());
+            var visitedPages = new HashSet<string>(StringComparer.Ordinal);
+            var pageCount = 0;
 
-            while (!string.IsNullOrEmpty(currentUrl))
+            try
             {
-                var page = await GetPageAsync(currentUrl, cancellationToken).ConfigureAwait(false);
-                count = checked(count + page.Records.Count);
-                currentUrl = page.NextLink;
+                while (!string.IsNullOrEmpty(currentUrl))
+                {
+                    EnsureCanFetchPage(pageCount);
+                    var pageUri = nextLinkValidator.Resolve(currentUrl);
+                    if (!visitedPages.Add(pageUri.AbsoluteUri))
+                        throw new D365ProtocolException("A loop was detected in D365 pagination links.");
+
+                    var page = await GetPageAsync(pageUri.AbsoluteUri, cancellationToken).ConfigureAwait(false);
+                    pageCount++;
+                    count = checked(count + page.Records.Count);
+                    currentUrl = page.NextLink;
+                }
+            }
+            catch (D365Exception exception)
+            {
+                exception.PartialRecordCount = count;
+                throw;
             }
 
             return count;
@@ -891,6 +923,17 @@ public class D365Query<T>
         return queryParts.Count == 0
             ? _entity
             : $"{_entity}?{string.Join("&", queryParts)}";
+    }
+
+    private void EnsureCanFetchPage(int fetchedPageCount)
+    {
+        if (_options.MaxPages <= 0)
+            throw new D365ProtocolException("D365 MaxPages must be greater than zero.");
+        if (fetchedPageCount >= _options.MaxPages)
+        {
+            throw new D365ProtocolException(
+                $"D365 pagination exceeded the configured MaxPages limit of {_options.MaxPages}.");
+        }
     }
 
     private void AppendOrderBy(string property, string direction)
