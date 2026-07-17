@@ -1,0 +1,31 @@
+name: D365 Live Integration Tests
+
+on:
+  workflow_dispatch:
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    environment: integration
+    env:
+      D365_RUN_INTEGRATION_TESTS: 'true'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Create protected integration settings
+      env:
+        APPSETTINGS_JSON: ${{ secrets.D365_INTEGRATION_APPSETTINGS_JSON }}
+      run: |
+        test -n "$APPSETTINGS_JSON"
+        printf '%s' "$APPSETTINGS_JSON" > FlintsLabs.D365.ODataClient.Tests/appsettings.json
+        chmod 600 FlintsLabs.D365.ODataClient.Tests/appsettings.json
+
+    - name: Run live integration tests
+      run: dotnet test FlintsLabs.D365.ODataClient.Tests/FlintsLabs.D365.ODataClient.Tests.csproj -c Release -f net8.0 --filter "Category=Integration"

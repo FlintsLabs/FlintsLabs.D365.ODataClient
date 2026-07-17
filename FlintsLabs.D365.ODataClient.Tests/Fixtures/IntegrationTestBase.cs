@@ -9,12 +9,22 @@ namespace FlintsLabs.D365.ODataClient.Tests.Fixtures;
 public class IntegrationTestBase
 {
     protected readonly IServiceProvider ServiceProvider;
+    private readonly HashSet<D365ServiceScope> _configuredScopes = [];
 
     public IntegrationTestBase()
     {
+        if (!string.Equals(
+                Environment.GetEnvironmentVariable("D365_RUN_INTEGRATION_TESTS"),
+                "true",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new SkipException(
+                "Live D365 tests require D365_RUN_INTEGRATION_TESTS=true.");
+        }
+
         var configuration = new ConfigurationBuilder()
-            .SetBasePath(Directory.GetCurrentDirectory())
-            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+            .SetBasePath(AppContext.BaseDirectory)
+            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
             .Build();
 
         var services = new ServiceCollection();
@@ -26,12 +36,14 @@ public class IntegrationTestBase
         if (configuration.GetSection("D365Configs_OnCloud").Exists())
         {
             services.AddD365ODataClient(D365ServiceScope.Cloud, configuration, "D365Configs_OnCloud");
+            _configuredScopes.Add(D365ServiceScope.Cloud);
         }
         
         // OnPrem Registration
         if (configuration.GetSection("D365Configs_OnPrem").Exists())
         {
             services.AddD365ODataClient(D365ServiceScope.OnPrem, configuration, "D365Configs_OnPrem");
+            _configuredScopes.Add(D365ServiceScope.OnPrem);
         }
 
         // Register configuration
@@ -40,8 +52,11 @@ public class IntegrationTestBase
         ServiceProvider = services.BuildServiceProvider();
     }
 
-    protected ID365Client GetClient(D365ServiceScope scope)
+    protected ID365Client? GetClient(D365ServiceScope scope)
     {
+        if (!_configuredScopes.Contains(scope))
+            return null;
+
         var factory = ServiceProvider.GetRequiredService<ID365ClientFactory>();
         return factory.GetClient(scope.ToString());
     }
