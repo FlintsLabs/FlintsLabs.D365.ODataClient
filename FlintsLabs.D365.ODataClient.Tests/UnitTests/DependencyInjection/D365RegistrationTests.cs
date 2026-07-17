@@ -6,6 +6,8 @@ using FlintsLabs.D365.ODataClient.Tests.TestInfrastructure;
 using FlintsLabs.D365.ODataClient.Transport;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Moq;
 
 namespace FlintsLabs.D365.ODataClient.Tests.UnitTests.DependencyInjection;
@@ -71,6 +73,22 @@ public class D365RegistrationTests
             .CreateClient("D365Endpoint_Cloud");
 
         Assert.Equal(Timeout.InfiniteTimeSpan, httpClient.Timeout);
+    }
+
+    [Fact]
+    public void NamedHttpClient_FrameworkLogsAreSuppressedBelowWarning()
+    {
+        using var provider = BuildProvider("Cloud", "https://cloud.example.test");
+
+        var rules = provider.GetRequiredService<IOptions<LoggerFilterOptions>>()
+            .Value.Rules;
+
+        Assert.Contains(rules, rule =>
+            rule.CategoryName == "System.Net.Http.HttpClient.D365Endpoint_Cloud"
+            && rule.LogLevel == LogLevel.Warning);
+        Assert.Contains(rules, rule =>
+            rule.CategoryName == "System.Net.Http.HttpClient.D365Auth_Cloud"
+            && rule.LogLevel == LogLevel.Warning);
     }
 
     [Fact]

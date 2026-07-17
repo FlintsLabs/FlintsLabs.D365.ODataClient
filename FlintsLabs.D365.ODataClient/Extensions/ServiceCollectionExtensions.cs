@@ -3,6 +3,7 @@ using FlintsLabs.D365.ODataClient.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 
 namespace FlintsLabs.D365.ODataClient.Extensions;
 
@@ -39,7 +40,17 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(new D365ClientRegistration(name));
         services.AddOptions<D365ClientOptions>(name)
             .Configure(options => CopyOptions(snapshot, options));
-        services.AddLogging();
+        services.AddLogging(logging =>
+        {
+            // The default HttpClientFactory Information logs include the full URL,
+            // including OData filter values. Keep framework logs to status/failures.
+            logging.AddFilter(
+                $"System.Net.Http.HttpClient.{snapshot.HttpClientName}",
+                LogLevel.Warning);
+            logging.AddFilter(
+                $"System.Net.Http.HttpClient.{snapshot.AuthHttpClientName}",
+                LogLevel.Warning);
+        });
 
         services.AddHttpClient(snapshot.HttpClientName, client =>
             {
