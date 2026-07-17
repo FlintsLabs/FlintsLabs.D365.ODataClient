@@ -56,7 +56,7 @@ public class CoalesceTests
         var httpClientFactoryMock = new Mock<IHttpClientFactory>();
         httpClientFactoryMock.Setup(x => x.CreateClient(It.IsAny<string>())).Returns(httpClient);
 
-        var query = new D365Query<TestEntity>(
+        var query = D365QueryTestFactory.Create<TestEntity>(
             httpClientFactoryMock.Object,
             Mock.Of<ILogger>(),
             new StubTokenProvider("fake-token"),

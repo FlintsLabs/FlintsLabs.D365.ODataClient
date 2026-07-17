@@ -45,26 +45,8 @@ public class D365Query<T>
     private sealed record KeyProperty(PropertyInfo Property, string ODataName);
     private static readonly KeyProperty[] KeyProperties = ResolveKeyProperties();
 
-    public D365Query(
-        IHttpClientFactory factory,
-        ILogger logger,
-        ID365AccessTokenProvider tokenProvider,
-        string entity,
-        D365ClientOptions options)
-        : this(
-            factory,
-            logger,
-            tokenProvider,
-            entity,
-            options,
-            new D365Transport(factory, logger, tokenProvider, options))
-    {
-    }
-
     internal D365Query(
-        IHttpClientFactory factory,
         ILogger logger,
-        ID365AccessTokenProvider tokenProvider,
         string entity,
         D365ClientOptions options,
         ID365Transport transport)

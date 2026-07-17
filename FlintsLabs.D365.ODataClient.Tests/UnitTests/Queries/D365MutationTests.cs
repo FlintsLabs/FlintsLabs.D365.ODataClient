@@ -305,7 +305,7 @@ public class D365MutationTests
         };
         var factory = new Mock<IHttpClientFactory>();
         factory.Setup(value => value.CreateClient(It.IsAny<string>())).Returns(httpClient);
-        var query = new D365Query<T>(
+        var query = D365QueryTestFactory.Create<T>(
             factory.Object,
             NullLogger.Instance,
             tokenProvider,

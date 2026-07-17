@@ -10,7 +10,7 @@ namespace FlintsLabs.D365.ODataClient.Services;
 /// <summary>
 /// Provides cached D365 access tokens for Azure AD or ADFS authentication.
 /// </summary>
-public sealed class D365AccessTokenProvider : ID365AccessTokenProvider
+internal sealed class D365AccessTokenProvider : ID365AccessTokenProvider
 {
     private static readonly TimeSpan RefreshBuffer = TimeSpan.FromMinutes(5);
 

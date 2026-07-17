@@ -12,9 +12,7 @@ using Microsoft.Extensions.Logging;
 namespace FlintsLabs.D365.ODataClient.Services;
 
 internal sealed class D365Client(
-    IHttpClientFactory httpClientFactory,
     ILogger logger,
-    ID365AccessTokenProvider tokenProvider,
     D365ClientOptions options,
     ID365Transport transport) : ID365Client
 {
@@ -29,9 +27,7 @@ internal sealed class D365Client(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(entity);
         return new D365Query<T>(
-            httpClientFactory,
             logger,
-            tokenProvider,
             entity,
             options,
             transport);

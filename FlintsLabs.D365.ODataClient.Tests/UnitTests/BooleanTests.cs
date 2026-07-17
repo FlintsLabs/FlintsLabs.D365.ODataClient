@@ -33,7 +33,7 @@ public class BooleanTests
 
         var options = new D365ClientOptions { Resource = "https://example.com" }; // Default config
 
-        var query = new D365Query<TestEntity>(
+        var query = D365QueryTestFactory.Create<TestEntity>(
             httpClientFactoryMock.Object,
             Mock.Of<ILogger>(),
             new StubTokenProvider("fake-token"),
@@ -77,7 +77,7 @@ public class BooleanTests
             BooleanFormatting = D365BooleanFormatting.Literal 
         };
 
-        var query = new D365Query<TestEntity>(
+        var query = D365QueryTestFactory.Create<TestEntity>(
             httpClientFactoryMock.Object,
             Mock.Of<ILogger>(),
             new StubTokenProvider("fake-token"),
@@ -116,7 +116,7 @@ public class BooleanTests
 
         var options = new D365ClientOptions { Resource = "https://example.com" };
 
-        var query = new D365Query<TestEntity>(
+        var query = D365QueryTestFactory.Create<TestEntity>(
             httpClientFactoryMock.Object,
             Mock.Of<ILogger>(),
             new StubTokenProvider("fake-token"),
@@ -157,7 +157,7 @@ public class BooleanTests
 
         var options = new D365ClientOptions { Resource = "https://example.com" }; // Default config (NoYes)
 
-        var query = new D365Query<TestEntity>(
+        var query = D365QueryTestFactory.Create<TestEntity>(
             httpClientFactoryMock.Object,
             Mock.Of<ILogger>(),
             new StubTokenProvider("fake-token"),

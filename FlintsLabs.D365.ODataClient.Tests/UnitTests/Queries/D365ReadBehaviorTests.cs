@@ -153,7 +153,7 @@ public class D365ReadBehaviorTests
 
     private static D365Query<TestEntity> CreateQuery(ID365Transport transport)
     {
-        return new D365Query<TestEntity>(
+        return D365QueryTestFactory.Create<TestEntity>(
             Mock.Of<IHttpClientFactory>(),
             NullLogger.Instance,
             new StubTokenProvider("token"),

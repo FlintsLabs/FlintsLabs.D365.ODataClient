@@ -125,7 +125,7 @@ public class D365PaginationTests
         ID365Transport transport,
         D365ClientOptions? options = null)
     {
-        return new D365Query<TestEntity>(
+        return D365QueryTestFactory.Create<TestEntity>(
             Mock.Of<IHttpClientFactory>(),
             NullLogger.Instance,
             new StubTokenProvider("token"),

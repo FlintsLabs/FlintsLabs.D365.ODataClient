@@ -1,6 +1,7 @@
 using System.Net;
 using FlintsLabs.D365.ODataClient.Services;
 using FlintsLabs.D365.ODataClient.Extensions;
+using FlintsLabs.D365.ODataClient.Tests.TestInfrastructure;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Moq.Protected;
@@ -43,42 +44,14 @@ public class HeaderTests
         httpClientFactoryMock.Setup(x => x.CreateClient(It.IsAny<string>())).Returns(httpClient);
 
         var loggerMock = new Mock<ILogger>();
-        loggerMock.Setup(x => x.Log(
-            It.IsAny<LogLevel>(),
-            It.IsAny<EventId>(),
-            It.IsAny<It.IsAnyType>(),
-            It.IsAny<Exception>(),
-            (Func<It.IsAnyType, Exception, string>)It.IsAny<object>()))
-            .Callback(new InvocationAction(invocation =>
-            {
-                var logLevel = (LogLevel)invocation.Arguments[0];
-                var state = invocation.Arguments[2];
-                var exception = (Exception)invocation.Arguments[3];
-                var formatter = invocation.Arguments[4];
-
-                var invokeMethod = formatter.GetType().GetMethod("Invoke");
-                var logMessage = (string)invokeMethod.Invoke(formatter, new[] { state, exception });
-
-                Console.WriteLine($"[{logLevel}] {logMessage}");
-                if (exception != null)
-                {
-                    Console.WriteLine(exception);
-                }
-            }));
-
-        var tokenProviderMock = new Mock<ID365AccessTokenProvider>();
-        tokenProviderMock
-            .Setup(x => x.GetAccessTokenAsync(It.IsAny<CancellationToken>()))
-            .Returns(ValueTask.FromResult(new FlintsLabs.D365.ODataClient.Models.D365AccessToken(
-                "fake-token",
-                DateTimeOffset.UtcNow.AddHours(1))));
+        var tokenProvider = new StubTokenProvider("fake-token");
 
         var options = new D365ClientOptions { Resource = "https://example.com" };
 
-        var query = new D365Query<TestEntity>(
+        var query = D365QueryTestFactory.Create<TestEntity>(
             httpClientFactoryMock.Object,
             loggerMock.Object,
-            tokenProviderMock.Object,
+            tokenProvider,
             "TestEntities",
             options
         );
@@ -103,8 +76,8 @@ public class HeaderTests
             LogLevel.Error,
             It.IsAny<EventId>(),
             It.IsAny<It.IsAnyType>(),
-            It.IsAny<Exception>(),
-            (Func<It.IsAnyType, Exception, string>)It.IsAny<object>()),
+            It.IsAny<Exception?>(),
+            (Func<It.IsAnyType, Exception?, string>)It.IsAny<object>()),
             Times.Never,
             "Expected no errors to be logged"
         );

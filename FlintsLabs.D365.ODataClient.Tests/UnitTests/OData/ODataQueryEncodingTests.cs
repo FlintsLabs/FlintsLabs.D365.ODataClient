@@ -114,7 +114,7 @@ public class ODataQueryEncodingTests
         ID365Transport transport,
         D365ClientOptions options)
     {
-        return new D365Query<TestEntity>(
+        return D365QueryTestFactory.Create<TestEntity>(
             Mock.Of<IHttpClientFactory>(),
             NullLogger.Instance,
             new StubTokenProvider("token"),

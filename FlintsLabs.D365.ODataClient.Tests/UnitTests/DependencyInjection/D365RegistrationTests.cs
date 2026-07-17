@@ -103,9 +103,7 @@ public class D365RegistrationTests
             HttpClientName = "D365Endpoint_Test"
         };
         var client = new D365Client(
-            httpClientFactory.Object,
             NullLogger.Instance,
-            new StubTokenProvider("token"),
             options,
             transport);
         using var cancellation = new CancellationTokenSource();

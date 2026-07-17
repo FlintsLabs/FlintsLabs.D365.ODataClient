@@ -1,5 +1,6 @@
 using FlintsLabs.D365.ODataClient.Services;
 using FlintsLabs.D365.ODataClient.Extensions;
+using FlintsLabs.D365.ODataClient.Tests.TestInfrastructure;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Moq.Protected;
@@ -42,19 +43,14 @@ public class ExpandTests
         httpClientFactoryMock.Setup(x => x.CreateClient(It.IsAny<string>())).Returns(httpClient);
 
         var loggerMock = new Mock<ILogger>();
-        var tokenProviderMock = new Mock<ID365AccessTokenProvider>();
-        tokenProviderMock
-            .Setup(x => x.GetAccessTokenAsync(It.IsAny<CancellationToken>()))
-            .Returns(ValueTask.FromResult(new FlintsLabs.D365.ODataClient.Models.D365AccessToken(
-                "fake-token",
-                DateTimeOffset.UtcNow.AddHours(1))));
+        var tokenProvider = new StubTokenProvider("fake-token");
 
         var options = new D365ClientOptions { Resource = "https://example.com" };
 
-        var query = new D365Query<TestEntity>(
+        var query = D365QueryTestFactory.Create<TestEntity>(
             httpClientFactoryMock.Object,
             loggerMock.Object,
-            tokenProviderMock.Object,
+            tokenProvider,
             "TestEntities",
             options
         );
@@ -100,19 +96,14 @@ public class ExpandTests
         httpClientFactoryMock.Setup(x => x.CreateClient(It.IsAny<string>())).Returns(httpClient);
 
         var loggerMock = new Mock<ILogger>();
-        var tokenProviderMock = new Mock<ID365AccessTokenProvider>();
-        tokenProviderMock
-            .Setup(x => x.GetAccessTokenAsync(It.IsAny<CancellationToken>()))
-            .Returns(ValueTask.FromResult(new FlintsLabs.D365.ODataClient.Models.D365AccessToken(
-                "fake-token",
-                DateTimeOffset.UtcNow.AddHours(1))));
+        var tokenProvider = new StubTokenProvider("fake-token");
 
         var options = new D365ClientOptions { Resource = "https://example.com" };
 
-        var query = new D365Query<TestEntity>(
+        var query = D365QueryTestFactory.Create<TestEntity>(
             httpClientFactoryMock.Object,
             loggerMock.Object,
-            tokenProviderMock.Object,
+            tokenProvider,
             "TestEntities",
             options
         );
@@ -158,19 +149,14 @@ public class ExpandTests
         httpClientFactoryMock.Setup(x => x.CreateClient(It.IsAny<string>())).Returns(httpClient);
 
         var loggerMock = new Mock<ILogger>();
-        var tokenProviderMock = new Mock<ID365AccessTokenProvider>();
-        tokenProviderMock
-            .Setup(x => x.GetAccessTokenAsync(It.IsAny<CancellationToken>()))
-            .Returns(ValueTask.FromResult(new FlintsLabs.D365.ODataClient.Models.D365AccessToken(
-                "fake-token",
-                DateTimeOffset.UtcNow.AddHours(1))));
+        var tokenProvider = new StubTokenProvider("fake-token");
 
         var options = new D365ClientOptions { Resource = "https://example.com" };
 
-        var query = new D365Query<TestEntity>(
+        var query = D365QueryTestFactory.Create<TestEntity>(
             httpClientFactoryMock.Object,
             loggerMock.Object,
-            tokenProviderMock.Object,
+            tokenProvider,
             "TestEntities",
             options
         );

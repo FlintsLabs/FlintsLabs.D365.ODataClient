@@ -85,9 +85,7 @@ internal sealed class D365ClientFactory : ID365ClientFactory
             clientOptions);
 
         return new D365Client(
-            _httpClientFactory,
             _loggerFactory.CreateLogger<D365Client>(),
-            tokenProvider,
             clientOptions,
             transport);
     }

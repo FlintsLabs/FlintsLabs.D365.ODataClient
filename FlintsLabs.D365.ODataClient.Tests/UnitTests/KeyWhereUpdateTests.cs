@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using FlintsLabs.D365.ODataClient.Attributes;
 using FlintsLabs.D365.ODataClient.Extensions;
 using FlintsLabs.D365.ODataClient.Services;
+using FlintsLabs.D365.ODataClient.Tests.TestInfrastructure;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Moq.Protected;
@@ -51,22 +52,17 @@ public class KeyWhereUpdateTests
         var httpClientFactoryMock = new Mock<IHttpClientFactory>();
         httpClientFactoryMock.Setup(x => x.CreateClient(It.IsAny<string>())).Returns(httpClient);
 
-        var tokenProviderMock = new Mock<ID365AccessTokenProvider>();
-        tokenProviderMock
-            .Setup(x => x.GetAccessTokenAsync(It.IsAny<CancellationToken>()))
-            .Returns(ValueTask.FromResult(new FlintsLabs.D365.ODataClient.Models.D365AccessToken(
-                "fake-token",
-                DateTimeOffset.UtcNow.AddHours(1))));
+        var tokenProvider = new StubTokenProvider("fake-token");
 
         var options = new D365ClientOptions
         {
             OrganizationUrl = "https://org782e707f.api.crm5.dynamics.com/api/data/v9.2/"
         };
 
-        var query = new D365Query<EgrHeadEth>(
+        var query = D365QueryTestFactory.Create<EgrHeadEth>(
             httpClientFactoryMock.Object,
             Mock.Of<ILogger>(),
-            tokenProviderMock.Object,
+            tokenProvider,
             "rvl_egrheadeths",
             options
         );
