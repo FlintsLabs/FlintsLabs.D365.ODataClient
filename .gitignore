@@ -5,6 +5,7 @@ riderModule.iml
 /_ReSharper.Caches/
 /.idea/
 /.worktrees/
+/artifacts/
 
 # Configuration
 **/appsettings.json

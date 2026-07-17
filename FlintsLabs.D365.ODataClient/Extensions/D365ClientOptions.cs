@@ -247,7 +247,7 @@ public class D365ClientOptions
     
     /// <summary>
     /// Boolean Formatting Strategy (NoYesEnum vs Literal)
-    /// Default: NoYesEnum (Standard F&O)
+    /// Default: NoYesEnum (Standard F&amp;O)
     /// </summary>
     public D365BooleanFormatting BooleanFormatting { get; set; } = D365BooleanFormatting.NoYesEnum;
 
@@ -280,7 +280,7 @@ public class D365ClientOptions
     public string? TenantId { get; set; }
     
     /// <summary>
-    /// D365 F&O Resource URL (e.g., https://your-org.operations.dynamics.com)
+    /// D365 F&amp;O Resource URL (e.g., https://your-org.operations.dynamics.com)
     /// </summary>
     public string? Resource { get; set; }
     

@@ -12,11 +12,11 @@
         
         <!-- NuGet Package Info -->
         <PackageId>FlintsLabs.D365.ODataClient</PackageId>
-        <Version>1.2.27</Version>
+        <Version>2.0.0</Version>
         <Authors>FlintsLabs</Authors>
         <Company>FlintsLabs</Company>
         <Product>D365 OData Client</Product>
-        <Description>Fluent OData client for Microsoft Dynamics 365 Finance and Operations. Provides a strongly-typed, LINQ-enabled query builder with support for CRUD operations, cross-company queries, and automatic token management. Supports both Azure AD (Cloud) and ADFS (On-Premise) authentication. Supports multiple D365 sources via named service factory.</Description>
+        <Description>Fail-closed fluent OData client for Microsoft Dynamics 365 Finance and Operations and Dataverse. Provides strongly typed LINQ queries, CRUD responses, typed failures, validated pagination, named clients, and shared token management for Azure AD and ADFS.</Description>
         <PackageTags>D365;OData;Dynamics365;FluentAPI;FinanceOperations;FO;SCM;ADFS;AzureAD</PackageTags>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <PackageReadmeFile>README.md</PackageReadmeFile>
@@ -24,30 +24,13 @@
         <PackageProjectUrl>https://github.com/FlintsLabs/FlintsLabs.D365.ODataClient</PackageProjectUrl>
         <RepositoryUrl>https://github.com/FlintsLabs/FlintsLabs.D365.ODataClient</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
-        <PackageReleaseNotes>
-v1.2.27: Added LINQ coalesce (??) support in OData translator with graceful error handling.
-v1.2.26: Added [OdataKey] support for key-based Update/Delete via Where().
-v1.2.25: Fixed BooleanFormatting config ignored in appsettings.json.
-v1.2.24: Fix !Prop.GetValueOrDefault() generation ($filter=null).
-v1.2.23: Configurable Boolean Formatting (NoYes vs Literal) for Dataverse support
-v1.2.22: Expand improvements, Header support, and Logging. Fixed Expand(x=>x).
-v1.2.21: LINQ OrderBy support (OrderBy, OrderByDescending, ThenBy, ThenByDescending)
-v1.2.20: Cached JsonSerializerOptions (reduces allocations)
-v1.2.19: Thread-safe registration (ConcurrentDictionary)
-v1.2.18: Enum cache optimization (ConcurrentDictionary)
-v1.2.17: Startup config validation (fail fast)
-v1.2.16: Entity(Enum) for type-safe entity names
-v1.2.15: Duplicate registration check
-v1.2.14: List.Contains() support (IN clause)
-v1.2.13: StringBuilder fix + logging docs
-v1.2.12: Request body logging (LogDebug)
-v1.2.11: Full URL logging
-See CHANGELOG.md for full history.
-        </PackageReleaseNotes>
+        <PackageReleaseNotes>2.0.0 is a breaking fail-closed release. High-level reads and mutations preserve HTTP, authentication, transport, timeout, protocol, and serialization failures instead of returning default values. It adds D365Response, typed exceptions, mutation outcomes, strict counts, validated pagination, bounded read retries, cancellation, named singleton clients, and single-flight token refresh. Migration guide: https://github.com/FlintsLabs/FlintsLabs.D365.ODataClient/blob/v2.0.0/docs/v2/migration-from-v1.md</PackageReleaseNotes>
         
         <!-- Package settings -->
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <NoWarn>$(NoWarn);1591</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>

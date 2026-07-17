@@ -7,7 +7,7 @@ public enum D365BooleanFormatting
 {
     /// <summary>
     /// Default: Format as Microsoft.Dynamics.DataEntities.NoYes'Yes'/'No'
-    /// Used by D365 Finance & Operations standard entities
+    /// Used by D365 Finance &amp; Operations standard entities
     /// </summary>
     NoYesEnum,
     
