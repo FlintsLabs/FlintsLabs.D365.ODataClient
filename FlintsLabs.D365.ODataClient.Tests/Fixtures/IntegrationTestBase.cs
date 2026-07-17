@@ -40,9 +40,9 @@ public class IntegrationTestBase
         ServiceProvider = services.BuildServiceProvider();
     }
 
-    protected ID365Service GetService(D365ServiceScope scope)
+    protected ID365Client GetClient(D365ServiceScope scope)
     {
-        var factory = ServiceProvider.GetRequiredService<ID365ServiceFactory>();
-        return factory.GetService(scope.ToString());
+        var factory = ServiceProvider.GetRequiredService<ID365ClientFactory>();
+        return factory.GetClient(scope.ToString());
     }
 }

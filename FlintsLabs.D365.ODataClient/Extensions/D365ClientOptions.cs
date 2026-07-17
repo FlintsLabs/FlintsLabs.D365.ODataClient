@@ -242,6 +242,8 @@ public class D365ClientOptions
     /// Internal: HttpClient name for IHttpClientFactory
     /// </summary>
     internal string HttpClientName { get; set; } = "D365Endpoint";
+
+    internal string AuthHttpClientName { get; set; } = "D365Auth";
     
     /// <summary>
     /// Client ID (App Registration in Azure AD or ADFS)

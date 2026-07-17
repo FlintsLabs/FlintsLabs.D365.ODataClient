@@ -16,15 +16,18 @@ public sealed class D365AccessTokenProvider : ID365AccessTokenProvider
 
     private readonly ILogger<D365AccessTokenProvider> _logger;
     private readonly D365ClientOptions _options;
+    private readonly IHttpClientFactory? _httpClientFactory;
     private readonly Func<CancellationToken, ValueTask<D365AccessToken>> _acquireToken;
     private readonly SemaphoreSlim _tokenLock = new(1, 1);
     private D365AccessToken? _accessToken;
 
     public D365AccessTokenProvider(
         ILogger<D365AccessTokenProvider> logger,
+        IHttpClientFactory httpClientFactory,
         IOptions<D365ClientOptions> options)
     {
         _logger = logger;
+        _httpClientFactory = httpClientFactory;
         _options = options.Value;
         _acquireToken = AcquireTokenAsync;
     }
@@ -36,6 +39,7 @@ public sealed class D365AccessTokenProvider : ID365AccessTokenProvider
     {
         _logger = logger;
         _options = options;
+        _httpClientFactory = null;
         _acquireToken = acquireToken;
     }
 
@@ -161,12 +165,9 @@ public sealed class D365AccessTokenProvider : ID365AccessTokenProvider
             ["grant_type"] = _options.GrantType
         };
 
-        // Preserve the existing on-premise behavior for self-signed ADFS certificates.
-        using var handler = new HttpClientHandler
-        {
-            ServerCertificateCustomValidationCallback = (_, _, _, _) => true
-        };
-        using var httpClient = new HttpClient(handler);
+        var httpClient = _httpClientFactory?.CreateClient(_options.AuthHttpClientName)
+                         ?? throw new InvalidOperationException(
+                             "IHttpClientFactory is required for ADFS token acquisition.");
         using var content = new FormUrlEncodedContent(tokenPostData);
         using var response = await httpClient
             .PostAsync(_options.TokenEndpoint, content, cancellationToken)

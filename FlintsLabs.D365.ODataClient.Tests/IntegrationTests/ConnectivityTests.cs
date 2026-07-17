@@ -10,7 +10,7 @@ public class ConnectivityTests : IntegrationTestBase
     public async Task Cloud_CanConnect_And_CountLegalEntities()
     {
         // Arrange
-        var d365 = GetService(D365ServiceScope.Cloud);
+        var d365 = GetClient(D365ServiceScope.Cloud);
         if (d365 == null) throw new SkipException("Cloud config not found.");
 
         // Act
@@ -27,7 +27,7 @@ public class ConnectivityTests : IntegrationTestBase
     public async Task OnPrem_CanConnect_And_CountLegalEntities()
     {
         // Arrange
-        var d365 = GetService(D365ServiceScope.OnPrem);
+        var d365 = GetClient(D365ServiceScope.OnPrem);
         if (d365 == null) throw new SkipException("OnPrem config not found.");
 
         // Act
