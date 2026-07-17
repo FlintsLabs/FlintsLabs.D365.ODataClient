@@ -6,6 +6,7 @@ namespace FlintsLabs.D365.ODataClient.Tests.IntegrationTests;
 public class ConnectivityTests : IntegrationTestBase
 {
     [SkippableFact]
+    [Trait("Category", "Integration")]
     public async Task Cloud_CanConnect_And_CountLegalEntities()
     {
         // Arrange
@@ -22,6 +23,7 @@ public class ConnectivityTests : IntegrationTestBase
     }
 
     [SkippableFact]
+    [Trait("Category", "Integration")]
     public async Task OnPrem_CanConnect_And_CountLegalEntities()
     {
         // Arrange
