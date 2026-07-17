@@ -28,7 +28,7 @@ public class D365Query<T>
     private readonly ID365Transport _transport;
     private readonly D365ClientOptions _options;
     private readonly string _entity;
-    private string _criteria = string.Empty;
+    private readonly ODataQueryBuilder _queryBuilder = new();
     private bool _crossCompany;
     private readonly Dictionary<string, string> _headerExtension = new();
 
@@ -168,7 +168,7 @@ public class D365Query<T>
     /// </summary>
     public D365Query<T> Count(bool enable = true)
     {
-        AppendCriteria("$count=" + (enable ? "true" : "false"));
+        _queryBuilder.Set("$count", enable ? "true" : "false");
         return this;
     }
 
@@ -179,7 +179,9 @@ public class D365Query<T>
     {
         var visitor = new D365ExpressionVisitor(_options.BooleanFormatting);
         var filter = visitor.Translate(predicate.Body);
-        AppendCriteria($"$filter={filter}");
+        if (_queryBuilder.TryGet("$filter", out var existingFilter))
+            filter = $"({existingFilter}) and ({filter})";
+        _queryBuilder.Set("$filter", filter);
         _wherePredicate = predicate;
         return this;
     }
@@ -190,7 +192,7 @@ public class D365Query<T>
     public D365Query<T> Select(Expression<Func<T, object>> selector)
     {
         var props = D365ExpressionHelper.GetPropertyNamesFromExpression(typeof(T), selector);
-        AppendCriteria($"$select={string.Join(',', props)}");
+        _queryBuilder.Set("$select", string.Join(',', props));
         return this;
     }
 
@@ -203,7 +205,7 @@ public class D365Query<T>
             return this;
 
         var queryString = string.Join(",", selectColumns);
-        AppendCriteria($"$select={queryString}");
+        _queryBuilder.Set("$select", queryString);
         return this;
     }
 
@@ -212,7 +214,7 @@ public class D365Query<T>
     /// </summary>
     public D365Query<T> Skip(int count)
     {
-        AppendCriteria($"$skip={count}");
+        _queryBuilder.Set("$skip", count.ToString(CultureInfo.InvariantCulture));
         return this;
     }
 
@@ -242,7 +244,7 @@ public class D365Query<T>
     public D365Query<T> OrderBy(string sortLabel, bool sortDirection)
     {
         var direction = sortDirection ? "asc" : "desc";
-        AppendCriteria($"$orderby={sortLabel} {direction}");
+        SetOrderBy(sortLabel, direction);
         return this;
     }
 
@@ -254,7 +256,7 @@ public class D365Query<T>
     public D365Query<T> OrderBy<TKey>(Expression<Func<T, TKey>> keySelector)
     {
         var propertyName = D365ExpressionHelper.GetPropertyName(keySelector);
-        AppendOrderBy(propertyName, "asc");
+        SetOrderBy(propertyName, "asc");
         return this;
     }
 
@@ -266,7 +268,7 @@ public class D365Query<T>
     public D365Query<T> OrderByDescending<TKey>(Expression<Func<T, TKey>> keySelector)
     {
         var propertyName = D365ExpressionHelper.GetPropertyName(keySelector);
-        AppendOrderBy(propertyName, "desc");
+        SetOrderBy(propertyName, "desc");
         return this;
     }
 
@@ -278,7 +280,7 @@ public class D365Query<T>
     public D365Query<T> ThenBy<TKey>(Expression<Func<T, TKey>> keySelector)
     {
         var propertyName = D365ExpressionHelper.GetPropertyName(keySelector);
-        AppendThenBy(propertyName, "asc");
+        AddThenBy(propertyName, "asc");
         return this;
     }
 
@@ -290,7 +292,7 @@ public class D365Query<T>
     public D365Query<T> ThenByDescending<TKey>(Expression<Func<T, TKey>> keySelector)
     {
         var propertyName = D365ExpressionHelper.GetPropertyName(keySelector);
-        AppendThenBy(propertyName, "desc");
+        AddThenBy(propertyName, "desc");
         return this;
     }
 
@@ -303,7 +305,7 @@ public class D365Query<T>
     {
         var navName = D365ExpressionHelper.GetPropertyName(navigation);
         var selectCols = D365ExpressionHelper.GetPropertyNamesFromExpression(typeof(TExpand), select);
-        AppendCriteria($"$expand={navName}($select={string.Join(',', selectCols)})");
+        _queryBuilder.AddExpand($"{navName}($select={string.Join(',', selectCols)})");
         return this;
     }
 
@@ -312,7 +314,7 @@ public class D365Query<T>
     /// </summary>
     public D365Query<T> Expand(string navigationName)
     {
-        AppendCriteria($"$expand={navigationName}");
+        _queryBuilder.AddExpand(navigationName);
         return this;
     }
 
@@ -333,7 +335,7 @@ public class D365Query<T>
         Expression<Func<TExpand, object>> select)
     {
         var selectCols = D365ExpressionHelper.GetPropertyNamesFromExpression(typeof(TExpand), select);
-        AppendCriteria($"$expand={navigationName}($select={string.Join(',', selectCols)})");
+        _queryBuilder.AddExpand($"{navigationName}($select={string.Join(',', selectCols)})");
         return this;
     }
 
@@ -401,7 +403,7 @@ public class D365Query<T>
     /// </summary>
     public async Task<string> AddAsync(T obj)
     {
-        var url = $"{_entity}";
+        var url = _queryBuilder.Build(_entity, _crossCompany);
         var json = JsonSerializer.Serialize(obj, DefaultSerializerOptions);
 
         _logger.LogInformation("D365 POST: {Url}", GetFullUrl(url));
@@ -431,31 +433,17 @@ public class D365Query<T>
     /// </summary>
     public async Task<string> AddAsync(object obj)
     {
-        var url = new StringBuilder(_entity);
-
-        // Support Cross-company if enabled
-        var hasQuery = false;
-        if (_crossCompany)
-        {
-            url.Append("?cross-company=true");
-            hasQuery = true;
-        }
-
-        if (!string.IsNullOrWhiteSpace(_criteria))
-        {
-            url.Append(hasQuery ? "&" : "?");
-            url.Append(_criteria);
-        }
+        var url = _queryBuilder.Build(_entity, _crossCompany);
 
         var json = JsonSerializer.Serialize(obj, DefaultSerializerOptions);
 
-        _logger.LogInformation("D365 POST: {Url}", GetFullUrl(url.ToString()));
+        _logger.LogInformation("D365 POST: {Url}", GetFullUrl(url));
         _logger.LogDebug("Request Body: {Body}", json);
 
         var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
         var httpClient = _httpClientFactory.CreateClient(_options.HttpClientName);
 
-        var request = await CreateHttpRequestMessageAsync(HttpMethod.Post, url.ToString());
+        var request = await CreateHttpRequestMessageAsync(HttpMethod.Post, url);
         request.Content = content;
 
         var response = await httpClient.SendAsync(request);
@@ -476,30 +464,17 @@ public class D365Query<T>
     /// </summary>
     public async Task<T1> AddAsync<T1>(object obj)
     {
-        var url = new StringBuilder(_entity);
-
-        var hasQuery = false;
-        if (_crossCompany)
-        {
-            url.Append("?cross-company=true");
-            hasQuery = true;
-        }
-
-        if (!string.IsNullOrWhiteSpace(_criteria))
-        {
-            url.Append(hasQuery ? "&" : "?");
-            url.Append(_criteria);
-        }
+        var url = _queryBuilder.Build(_entity, _crossCompany);
 
         var json = JsonSerializer.Serialize(obj, DefaultSerializerOptions);
 
-        _logger.LogInformation("D365 POST: {Url}", GetFullUrl(url.ToString()));
+        _logger.LogInformation("D365 POST: {Url}", GetFullUrl(url));
         _logger.LogDebug("Request Body: {Body}", json);
 
         var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
         var httpClient = _httpClientFactory.CreateClient(_options.HttpClientName);
 
-        var request = await CreateHttpRequestMessageAsync(HttpMethod.Post, url.ToString());
+        var request = await CreateHttpRequestMessageAsync(HttpMethod.Post, url);
         request.Content = content;
 
         var response = await httpClient.SendAsync(request);
@@ -548,28 +523,16 @@ public class D365Query<T>
             : kvp.Value is DateTime dt ? $"{kvp.Key}={dt:s}Z"
             : $"{kvp.Key}={kvp.Value}"));
 
-        var url = new StringBuilder($"{_entity}({identityClause})");
-        var hasQuery = false;
-        if (_crossCompany)
-        {
-            url.Append("?cross-company=true");
-            hasQuery = true;
-        }
-
-        if (!string.IsNullOrWhiteSpace(_criteria))
-        {
-            url.Append(hasQuery ? "&" : "?");
-            url.Append(_criteria);
-        }
+        var url = _queryBuilder.Build($"{_entity}({identityClause})", _crossCompany);
 
         var json = JsonSerializer.Serialize(obj, DefaultSerializerOptions);
 
-        _logger.LogInformation("D365 PATCH: {Url}", GetFullUrl(url.ToString()));
+        _logger.LogInformation("D365 PATCH: {Url}", GetFullUrl(url));
         _logger.LogDebug("Request Body: {Body}", json);
 
         var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
         var httpClient = _httpClientFactory.CreateClient(_options.HttpClientName);
-        var request = await CreateHttpRequestMessageAsync(HttpMethod.Patch, url.ToString());
+        var request = await CreateHttpRequestMessageAsync(HttpMethod.Patch, url);
         request.Content = content;
 
         var response = await httpClient.SendAsync(request);
@@ -616,28 +579,16 @@ public class D365Query<T>
         var identityClause = string.Join(",", _identities.Select(kvp =>
             kvp.Value is string ? $"{kvp.Key}='{kvp.Value}'" : $"{kvp.Key}={kvp.Value}"));
 
-        var url = new StringBuilder($"{_entity}({identityClause})");
-        var hasQuery = false;
-        if (_crossCompany)
-        {
-            url.Append("?cross-company=true");
-            hasQuery = true;
-        }
-
-        if (!string.IsNullOrWhiteSpace(_criteria))
-        {
-            url.Append(hasQuery ? "&" : "?");
-            url.Append(_criteria);
-        }
+        var url = _queryBuilder.Build($"{_entity}({identityClause})", _crossCompany);
 
         var json = JsonSerializer.Serialize(partialObject, DefaultSerializerOptions);
 
-        _logger.LogInformation("D365 PATCH: {Url}", GetFullUrl(url.ToString()));
+        _logger.LogInformation("D365 PATCH: {Url}", GetFullUrl(url));
         _logger.LogDebug("Request Body: {Body}", json);
 
         var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
         var httpClient = _httpClientFactory.CreateClient(_options.HttpClientName);
-        var request = await CreateHttpRequestMessageAsync(HttpMethod.Patch, url.ToString());
+        var request = await CreateHttpRequestMessageAsync(HttpMethod.Patch, url);
         request.Content = content;
 
         var response = await httpClient.SendAsync(request);
@@ -665,24 +616,12 @@ public class D365Query<T>
             : kvp.Value is DateTime dt ? $"{kvp.Key}={dt:s}Z"
             : $"{kvp.Key}={kvp.Value}"));
 
-        var url = new StringBuilder($"{_entity}({identityClause})");
-        var hasQuery = false;
-        if (_crossCompany)
-        {
-            url.Append("?cross-company=true");
-            hasQuery = true;
-        }
+        var url = _queryBuilder.Build($"{_entity}({identityClause})", _crossCompany);
 
-        if (!string.IsNullOrWhiteSpace(_criteria))
-        {
-            url.Append(hasQuery ? "&" : "?");
-            url.Append(_criteria);
-        }
-
-        _logger.LogInformation("D365 DELETE: {Url}", GetFullUrl(url.ToString()));
+        _logger.LogInformation("D365 DELETE: {Url}", GetFullUrl(url));
 
         var httpClient = _httpClientFactory.CreateClient(_options.HttpClientName);
-        var request = await CreateHttpRequestMessageAsync(HttpMethod.Delete, url.ToString());
+        var request = await CreateHttpRequestMessageAsync(HttpMethod.Delete, url);
         var response = await httpClient.SendAsync(request);
         var result = await response.Content.ReadAsStringAsync();
 
@@ -712,14 +651,7 @@ public class D365Query<T>
         if (_clientPredicate != null)
         {
             long count = 0;
-            var queryParts = new List<string>();
-            if (_crossCompany)
-                queryParts.Add("cross-company=true");
-
-            if (!string.IsNullOrWhiteSpace(_criteria))
-                queryParts.Add(_criteria);
-
-            string? currentUrl = BuildUrl(queryParts);
+            string? currentUrl = _queryBuilder.Build(_entity, _crossCompany);
             var nextLinkValidator = new ODataNextLinkValidator(_options.GetBaseUrl());
             var visitedPages = new HashSet<string>(StringComparer.Ordinal);
             var pageCount = 0;
@@ -749,20 +681,14 @@ public class D365Query<T>
         }
         else
         {
-            var queryParts = new List<string>();
-            if (_crossCompany)
-                queryParts.Add("cross-company=true");
-
-            if (!string.IsNullOrWhiteSpace(_criteria))
-                queryParts.Add(_criteria);
-
-            if (!queryParts.Any(x => x.Contains("$count=true", StringComparison.OrdinalIgnoreCase)))
-                queryParts.Add("$count=true");
-
-            queryParts.Add("$top=0");
+            var overrides = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["$count"] = "true",
+                ["$top"] = "0"
+            };
 
             var page = await GetPageAsync(
-                    BuildUrl(queryParts),
+                    _queryBuilder.Build(_entity, _crossCompany, overrides),
                     cancellationToken,
                     requireCount: true)
                 .ConfigureAwait(false);
@@ -925,22 +851,16 @@ public class D365Query<T>
 
     private string BuildReadUrl(bool includeServerTop)
     {
-        var queryParts = new List<string>();
-        if (_crossCompany)
-            queryParts.Add("cross-company=true");
-        if (!string.IsNullOrWhiteSpace(_criteria))
-            queryParts.Add(_criteria);
+        Dictionary<string, string>? overrides = null;
         if (includeServerTop && _clientPredicate is null && _takeCount.HasValue)
-            queryParts.Add($"$top={_takeCount}");
+        {
+            overrides = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["$top"] = _takeCount.Value.ToString(CultureInfo.InvariantCulture)
+            };
+        }
 
-        return BuildUrl(queryParts);
-    }
-
-    private string BuildUrl(IReadOnlyCollection<string> queryParts)
-    {
-        return queryParts.Count == 0
-            ? _entity
-            : $"{_entity}?{string.Join("&", queryParts)}";
+        return _queryBuilder.Build(_entity, _crossCompany, overrides);
     }
 
     private void EnsureCanFetchPage(int fetchedPageCount)
@@ -954,75 +874,17 @@ public class D365Query<T>
         }
     }
 
-    private void AppendOrderBy(string property, string direction)
+    private void SetOrderBy(string property, string direction)
     {
-        var orderByClause = $"$orderby={property} {direction}";
-        
-        // Check if $orderby already exists
-        var existingIndex = _criteria.IndexOf("$orderby=", StringComparison.OrdinalIgnoreCase);
-        if (existingIndex >= 0)
-        {
-            // Replace existing $orderby with new one (OrderBy resets the sort)
-            var existingEndIndex = _criteria.IndexOf('&', existingIndex);
-            _criteria = existingEndIndex >= 0
-                ? _criteria[..existingIndex] + orderByClause + _criteria[existingEndIndex..]
-                : _criteria[..existingIndex] + orderByClause;
-        }
-        else
-        {
-            AppendCriteria(orderByClause);
-        }
+        _queryBuilder.Set("$orderby", $"{property} {direction}");
     }
 
-    private void AppendThenBy(string property, string direction)
+    private void AddThenBy(string property, string direction)
     {
-        // Check if $orderby already exists
-        var existingIndex = _criteria.IndexOf("$orderby=", StringComparison.OrdinalIgnoreCase);
-        if (existingIndex >= 0)
-        {
-            // Find end of existing $orderby
-            var existingEndIndex = _criteria.IndexOf('&', existingIndex);
-            var insertPosition = existingEndIndex >= 0 ? existingEndIndex : _criteria.Length;
-            
-            // Append to existing $orderby with comma separator
-            var appendPart = $",{property} {direction}";
-            _criteria = _criteria.Insert(insertPosition, appendPart);
-        }
+        if (_queryBuilder.TryGet("$orderby", out var existing))
+            _queryBuilder.Set("$orderby", $"{existing},{property} {direction}");
         else
-        {
-            // No existing $orderby, treat as primary OrderBy
-            AppendOrderBy(property, direction);
-        }
-    }
-
-    private void AppendCriteria(string part)
-    {
-        if (part.StartsWith("$expand=", StringComparison.OrdinalIgnoreCase))
-        {
-            var existingIndex = _criteria.IndexOf("$expand=", StringComparison.OrdinalIgnoreCase);
-            if (existingIndex >= 0)
-            {
-                var existingEndIndex = _criteria.IndexOf('&', existingIndex);
-                var existingExpand = existingEndIndex >= 0
-                    ? _criteria.Substring(existingIndex, existingEndIndex - existingIndex)
-                    : _criteria.Substring(existingIndex);
-
-                var newExpandValue = part["$expand=".Length..];
-                var existingExpandValue = existingExpand["$expand=".Length..];
-
-                var combinedExpand = $"$expand={existingExpandValue},{newExpandValue}";
-
-                _criteria = existingEndIndex >= 0
-                    ? _criteria[..existingIndex] + combinedExpand + _criteria[existingEndIndex..]
-                    : _criteria[..existingIndex] + combinedExpand;
-
-                return;
-            }
-        }
-
-        if (!string.IsNullOrWhiteSpace(_criteria))
-            _criteria += "&";
-        _criteria += part;
+            SetOrderBy(property, direction);
     }
 
     private void EnsureIdentitiesForWrite()
@@ -1033,7 +895,8 @@ public class D365Query<T>
         if (TryPopulateIdentitiesFromWhere())
         {
             // Clear filter criteria used only for key lookup to avoid invalid PATCH/DELETE query strings.
-            _criteria = string.Empty;
+            _queryBuilder.Remove("$filter");
+            _wherePredicate = null;
             return;
         }
 

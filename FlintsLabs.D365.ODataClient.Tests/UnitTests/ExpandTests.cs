@@ -68,7 +68,7 @@ public class ExpandTests
            "SendAsync",
            Times.Once(),
            ItExpr.Is<HttpRequestMessage>(req =>
-              req.RequestUri!.ToString().Contains("$expand=EgrLines")
+              Uri.UnescapeDataString(req.RequestUri!.ToString()).Contains("$expand=EgrLines")
            ),
            ItExpr.IsAny<CancellationToken>()
         );
@@ -126,7 +126,7 @@ public class ExpandTests
            "SendAsync",
            Times.Once(),
            ItExpr.Is<HttpRequestMessage>(req =>
-              req.RequestUri!.ToString().Contains("$expand=Parent")
+              Uri.UnescapeDataString(req.RequestUri!.ToString()).Contains("$expand=Parent")
            ),
            ItExpr.IsAny<CancellationToken>()
         );
@@ -194,7 +194,7 @@ public class ExpandTests
            "SendAsync",
            Times.Once(),
            ItExpr.Is<HttpRequestMessage>(req =>
-              req.RequestUri!.ToString().Contains("$expand=Parent($select=*)")
+              Uri.UnescapeDataString(req.RequestUri!.ToString()).Contains("$expand=Parent($select=*)")
            ),
            ItExpr.IsAny<CancellationToken>()
         );

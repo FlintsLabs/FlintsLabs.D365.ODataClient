@@ -51,7 +51,8 @@ public class BooleanTests
            "SendAsync",
            Times.Once(),
            ItExpr.Is<HttpRequestMessage>(req =>
-              req.RequestUri!.ToString().Contains("IsActive eq Microsoft.Dynamics.DataEntities.NoYes'No'")
+              Uri.UnescapeDataString(req.RequestUri!.ToString())
+                  .Contains("IsActive eq Microsoft.Dynamics.DataEntities.NoYes'No'")
            ),
            ItExpr.IsAny<CancellationToken>()
         );
@@ -94,7 +95,7 @@ public class BooleanTests
            "SendAsync",
            Times.Once(),
            ItExpr.Is<HttpRequestMessage>(req =>
-              req.RequestUri!.ToString().Contains("IsActive eq false")
+              Uri.UnescapeDataString(req.RequestUri!.ToString()).Contains("IsActive eq false")
            ),
            ItExpr.IsAny<CancellationToken>()
         );
@@ -134,7 +135,8 @@ public class BooleanTests
            "SendAsync",
            Times.Once(),
            ItExpr.Is<HttpRequestMessage>(req =>
-              req.RequestUri!.ToString().Contains("not ((IsPublished eq Microsoft.Dynamics.DataEntities.NoYes'Yes'))")
+              Uri.UnescapeDataString(req.RequestUri!.ToString())
+                  .Contains("not ((IsPublished eq Microsoft.Dynamics.DataEntities.NoYes'Yes'))")
            ),
            ItExpr.IsAny<CancellationToken>()
         );
@@ -174,7 +176,8 @@ public class BooleanTests
            "SendAsync",
            Times.Once(),
            ItExpr.Is<HttpRequestMessage>(req =>
-              req.RequestUri!.ToString().Contains("IsPublished eq Microsoft.Dynamics.DataEntities.NoYes'No'")
+              Uri.UnescapeDataString(req.RequestUri!.ToString())
+                  .Contains("IsPublished eq Microsoft.Dynamics.DataEntities.NoYes'No'")
            ),
            ItExpr.IsAny<CancellationToken>()
         );

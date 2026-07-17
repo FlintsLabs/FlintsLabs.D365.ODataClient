@@ -1,9 +1,9 @@
-using System.Globalization;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
 using System.Text.Json.Serialization;
 using FlintsLabs.D365.ODataClient.Enums;
+using FlintsLabs.D365.ODataClient.OData;
 
 namespace FlintsLabs.D365.ODataClient.Expressions;
 
@@ -164,59 +164,7 @@ public class D365ExpressionVisitor : ExpressionVisitor
 
     private void AppendConstant(object? value)
     {
-        if (value == null)
-        {
-            _sb.Append("null");
-            return;
-        }
-
-        switch (value)
-        {
-            // String
-            case string s:
-                // Special case for DataEntity Enum e.g. Microsoft.Dynamics.DataEntities.EcoResProductType'Item'
-                if (s.StartsWith("Microsoft.Dynamics.DataEntities.") ||
-                    s.StartsWith("Microsoft.Dynamics.AX.Application."))
-                {
-                    _sb.Append(s); // Don't add single quotes around it
-                    break;
-                }
-
-                _sb.Append('\'').Append(s.Replace("'", "''")).Append('\'');
-                break;
-
-            // Boolean
-            case bool b:
-                if (_booleanFormatting == D365BooleanFormatting.Literal)
-                {
-                    _sb.Append(b ? "true" : "false");
-                }
-                else
-                {
-                    _sb.Append(b ? D365NoYes.Yes : D365NoYes.No);
-                }
-                break;
-
-            // DateTime -> ISO8601 UTC
-            case DateTime dt:
-                _sb.Append(dt.ToUniversalTime().ToString("s") + "Z");
-                break;
-
-            // Enum -> string literal
-            case Enum e:
-                _sb.Append('\'').Append(e.ToString()).Append('\'');
-                break;
-
-            // Numeric types
-            case int or long or double or decimal:
-                _sb.Append(Convert.ToString(value, CultureInfo.InvariantCulture));
-                break;
-
-            // Fallback
-            default:
-                _sb.Append("'").Append(value.ToString()?.Replace("'", "''")).Append("'");
-                break;
-        }
+        _sb.Append(ODataLiteralFormatter.Format(value, _booleanFormatting));
     }
 
     private static object? GetValue(MemberExpression member)
@@ -259,10 +207,11 @@ public class D365ExpressionVisitor : ExpressionVisitor
 
             return null;
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            Console.WriteLine($"[GetValue ERROR] {member.Member.Name}: {ex.Message}");
-            return null;
+            throw new NotSupportedException(
+                $"Member '{member.Member.Name}' could not be evaluated as an OData constant.",
+                exception);
         }
     }
 
@@ -273,9 +222,11 @@ public class D365ExpressionVisitor : ExpressionVisitor
         if (node.Method.Name == "Contains")
         {
             // Case 1: Instance method - list.Contains(x.Property)
-            if (node.Object != null && node.Arguments.Count == 1)
+            if (node.Object != null
+                && node.Object.Type != typeof(string)
+                && node.Arguments.Count == 1)
             {
-                var listValue = GetValueFromExpression(node.Object);
+                var listValue = GetCollectionValue(node.Object);
                 var propertyExpr = node.Arguments[0] as MemberExpression;
                 
                 if (listValue is System.Collections.IEnumerable enumerable && propertyExpr != null)
@@ -287,7 +238,7 @@ public class D365ExpressionVisitor : ExpressionVisitor
             // Case 2: Extension method - Enumerable.Contains(list, x.Property)
             if (node.Object == null && node.Arguments.Count == 2)
             {
-                var listValue = GetValueFromExpression(node.Arguments[0]);
+                var listValue = GetCollectionValue(node.Arguments[0]);
                 var propertyExpr = node.Arguments[1] as MemberExpression;
                 
                 if (listValue is System.Collections.IEnumerable enumerable && propertyExpr != null)
@@ -297,62 +248,51 @@ public class D365ExpressionVisitor : ExpressionVisitor
             }
         }
         
-        // Handle DateTime and other .NET method calls by evaluating the value
+        // Handle GetValueOrDefault() for nullable booleans.
+        if (node.Method.Name == "GetValueOrDefault"
+            && node.Object is MemberExpression nullableBoolean
+            && (nullableBoolean.Type == typeof(bool?) || nullableBoolean.Type == typeof(bool)))
+        {
+            _sb.Append("(");
+            Visit(nullableBoolean);
+            _sb.Append(" eq ");
+            AppendConstant(true);
+            _sb.Append(")");
+            return node;
+        }
+
+        if (node.Method.DeclaringType == typeof(string)
+            && node.Object is not null
+            && node.Arguments.Count == 1
+            && node.Method.Name is nameof(string.Contains)
+                or nameof(string.StartsWith)
+                or nameof(string.EndsWith))
+        {
+            var functionName = node.Method.Name switch
+            {
+                nameof(string.Contains) => "contains",
+                nameof(string.StartsWith) => "startswith",
+                _ => "endswith"
+            };
+            _sb.Append(functionName).Append('(');
+            Visit(node.Object);
+            _sb.Append(',');
+            AppendConstant(GetValueFromExpression(node.Arguments[0]));
+            _sb.Append(')');
+            return node;
+        }
+
         try
         {
-            var instance = node.Object is MemberExpression objMember ? GetValue(objMember) : null;
-            var args = node.Arguments.Select(GetValueFromExpression).ToArray();
-
-            // Handle GetValueOrDefault() for nullable booleans
-            if (node.Method.Name == "GetValueOrDefault" && node.Object is MemberExpression me && 
-                (me.Type == typeof(bool?) || me.Type == typeof(bool)))
-            {
-                // Translate as: (Property eq true)
-                // This correctly handles "true" case.
-                _sb.Append("(");
-                Visit(me);
-                _sb.Append(" eq ");
-                
-                if (_booleanFormatting == D365BooleanFormatting.Literal)
-                    _sb.Append("true");
-                else
-                    _sb.Append(D365NoYes.Yes);
-                    
-                _sb.Append(")");
-                return node;
-            }
-
-            var result = node.Method.Invoke(instance, args);
-            AppendConstant(result);
+            AppendConstant(Expression.Lambda(node).Compile().DynamicInvoke());
+            return node;
         }
-        catch
+        catch (Exception exception)
         {
-            // Handle known OData functions for string
-            if (node.Method.DeclaringType == typeof(string))
-            {
-                var arg = GetValueFromExpression(node.Arguments[0]);
-                var propName = (node.Object as MemberExpression)?.Member.GetCustomAttribute<JsonPropertyNameAttribute>()
-                               ?.Name
-                               ?? (node.Object as MemberExpression)?.Member.Name ?? "unknown";
-
-                switch (node.Method.Name)
-                {
-                    case nameof(string.Contains):
-                        _sb.Append($"contains({propName},'{arg}')");
-                        return node;
-                    case nameof(string.StartsWith):
-                        _sb.Append($"startswith({propName},'{arg}')");
-                        return node;
-                    case nameof(string.EndsWith):
-                        _sb.Append($"endswith({propName},'{arg}')");
-                        return node;
-                }
-            }
-
-            _sb.Append("null"); // fallback
+            throw new NotSupportedException(
+                $"Method '{node.Method.Name}' cannot be translated to OData.",
+                exception);
         }
-
-        return node;
     }
     
     /// <summary>
@@ -368,16 +308,7 @@ public class D365ExpressionVisitor : ExpressionVisitor
         {
             if (val == null) continue;
             
-            // Format value based on type
-            string formatted = val switch
-            {
-                string s => $"'{s}'",
-                Guid g => g.ToString(),
-                int or long or short or byte => val.ToString()!,
-                decimal or double or float => Convert.ToString(val, CultureInfo.InvariantCulture)!,
-                _ => $"'{val}'"
-            };
-            
+            var formatted = ODataLiteralFormatter.Format(val, _booleanFormatting);
             orParts.Add($"{propName} eq {formatted}");
         }
         
@@ -408,18 +339,27 @@ public class D365ExpressionVisitor : ExpressionVisitor
         };
     }
 
+    private static object? GetCollectionValue(Expression expression)
+    {
+        // .NET 10 can represent array Contains as an implicit ReadOnlySpan<T>
+        // conversion. Evaluate the source collection because spans cannot be boxed.
+        if (expression is MethodCallExpression
+            {
+                Method.Name: "op_Implicit",
+                Arguments.Count: 1
+            } conversion)
+        {
+            return GetValueFromExpression(conversion.Arguments[0]);
+        }
+
+        return GetValueFromExpression(expression);
+    }
+
     private static object? EvaluateMethodCall(MethodCallExpression mc)
     {
         var instance = mc.Object is MemberExpression objMember ? GetValue(objMember) : null;
         var args = mc.Arguments.Select(GetValueFromExpression).ToArray();
-        try
-        {
-            return mc.Method.Invoke(instance, args);
-        }
-        catch
-        {
-            return null;
-        }
+        return mc.Method.Invoke(instance, args);
     }
 
     private static string GetOperator(ExpressionType type) => type switch
