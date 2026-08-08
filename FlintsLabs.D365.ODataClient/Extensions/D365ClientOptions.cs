@@ -190,8 +190,8 @@ public class D365ClientBuilder
         Options.OrganizationUrl = section["OrganizationUrl"];
         Options.TokenEndpoint = section["TokenEndpoint"];
         Options.GrantType = section["GrantType"] ?? "client_credentials";
-
         Options.Scope = section["Scope"];
+        Options.ManagedIdentityClientId = section["ManagedIdentityClientId"];
 
         if (int.TryParse(section["Retry:MaxReadRetries"], out var maxReadRetries))
             Options.Retry.MaxReadRetries = maxReadRetries;
@@ -212,22 +212,60 @@ public class D365ClientBuilder
             Options.BooleanFormatting = D365BooleanFormatting.NoYesEnum; // Default
         }
         
-        // Validate required fields
+        var configuredAuthType = section["AuthType"];
+        Options.AuthType = configuredAuthType is null
+            ? DetectLegacyAuthType()
+            : ParseConfiguredAuthType(configuredAuthType, sectionName);
+
+        if (Options.AuthType == D365AuthType.ManagedIdentity)
+        {
+            if (string.IsNullOrWhiteSpace(Options.ManagedIdentityClientId))
+                Options.ManagedIdentityClientId = null;
+
+            Options.ClientId = null;
+            Options.ClientSecret = null;
+            Options.TenantId = null;
+        }
+        else
+        {
+            Options.ManagedIdentityClientId = null;
+        }
+
         ValidateRequiredFields(sectionName);
         
-        // Auto-detect ADFS
-        // Logic: If TenantId is explicitly "adfs" OR (TokenEndpoint is present AND TenantId is NOT a GUID)
-        // This prevents Dataverse config (which has TokenEndpoint + GUID TenantId) from being detected as ADFS
+        return this;
+    }
+
+    private D365AuthType DetectLegacyAuthType()
+    {
+        // If TenantId is explicitly "adfs" OR TokenEndpoint is present and TenantId is not a GUID,
+        // retain the legacy ADFS behavior. A GUID TenantId plus TokenEndpoint remains Azure AD.
         bool isExplicitAdfs = string.Equals(Options.TenantId, "adfs", StringComparison.OrdinalIgnoreCase);
         bool hasTokenEndpoint = !string.IsNullOrWhiteSpace(Options.TokenEndpoint);
         bool isTenantGuid = Guid.TryParse(Options.TenantId, out _);
 
-        Options.AuthType = isExplicitAdfs || (hasTokenEndpoint && !isTenantGuid)
+        return isExplicitAdfs || (hasTokenEndpoint && !isTenantGuid)
             ? D365AuthType.ADFS
             : D365AuthType.AzureAD;
-        Options.ManagedIdentityClientId = null;
-        
-        return this;
+    }
+
+    private static D365AuthType ParseConfiguredAuthType(
+        string configuredAuthType,
+        string sectionName)
+    {
+        var normalizedAuthType = configuredAuthType.Trim();
+        if (Enum.TryParse<D365AuthType>(normalizedAuthType, true, out var authType)
+            && string.Equals(
+                Enum.GetName(typeof(D365AuthType), authType),
+                normalizedAuthType,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return authType;
+        }
+
+        throw new InvalidOperationException(
+            $"D365 configuration '{sectionName}' contains an invalid AuthType. " +
+            "Allowed values are AzureAD, ADFS, and ManagedIdentity.");
     }
     
     /// <summary>
@@ -236,23 +274,40 @@ public class D365ClientBuilder
     private void ValidateRequiredFields(string sectionName)
     {
         var errors = new List<string>();
-        
-        if (string.IsNullOrWhiteSpace(Options.ClientId))
-            errors.Add("ClientId");
-        
-        if (string.IsNullOrWhiteSpace(Options.ClientSecret))
-            errors.Add("ClientSecret");
+
+        if (Options.AuthType == D365AuthType.ManagedIdentity)
+        {
+            if (Options.ManagedIdentityClientId is not null
+                && !Guid.TryParse(Options.ManagedIdentityClientId, out _))
+            {
+                errors.Add("ManagedIdentityClientId (must be a GUID)");
+            }
+
+            if (string.IsNullOrWhiteSpace(Options.Scope)
+                && string.IsNullOrWhiteSpace(Options.Resource))
+            {
+                errors.Add("Scope or Resource");
+            }
+        }
+        else
+        {
+            if (string.IsNullOrWhiteSpace(Options.ClientId))
+                errors.Add("ClientId");
+
+            if (string.IsNullOrWhiteSpace(Options.ClientSecret))
+                errors.Add("ClientSecret");
+
+            // TenantId required for Azure AD (not ADFS)
+            bool hasTokenEndpoint = !string.IsNullOrWhiteSpace(Options.TokenEndpoint);
+            bool isAdfs = string.Equals(Options.TenantId, "adfs", StringComparison.OrdinalIgnoreCase);
+
+            if (!isAdfs && !hasTokenEndpoint && string.IsNullOrWhiteSpace(Options.TenantId))
+                errors.Add("TenantId");
+        }
         
         // Either Resource or OrganizationUrl is required
         if (string.IsNullOrWhiteSpace(Options.Resource) && string.IsNullOrWhiteSpace(Options.OrganizationUrl))
             errors.Add("Resource or OrganizationUrl");
-        
-        // TenantId required for Azure AD (not ADFS)
-        bool hasTokenEndpoint = !string.IsNullOrWhiteSpace(Options.TokenEndpoint);
-        bool isAdfs = string.Equals(Options.TenantId, "adfs", StringComparison.OrdinalIgnoreCase);
-        
-        if (!isAdfs && !hasTokenEndpoint && string.IsNullOrWhiteSpace(Options.TenantId))
-            errors.Add("TenantId");
         
         if (errors.Count > 0)
         {
