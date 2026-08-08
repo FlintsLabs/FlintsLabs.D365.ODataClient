@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-08-08
+### Added
+- Fluent System-assigned and User-assigned Azure Managed Identity authentication using the existing MSAL dependency
+- Typed `D365TokenAcquisitionException` for MSAL acquisition failures without credential data in the package message
+
+### Changed
+- Managed Identity token acquisition shares one MSAL application per named client and forces one refresh only after D365 rejects a token with HTTP 401
+- `FromConfiguration()` remains limited to Azure AD client-secret and ADFS authentication; Managed Identity requires an explicit fluent selector and never falls back to a client secret
+
 ## [2.0.0] - 2026-07-17
 ### Breaking
 - Replaced `ID365Service` / `ID365ServiceFactory` with `ID365Client` / `ID365ClientFactory`

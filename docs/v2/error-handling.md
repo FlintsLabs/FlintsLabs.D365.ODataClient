@@ -35,6 +35,7 @@ Exception
 |- D365Exception
 |  |- D365HttpException
 |  |  `- D365AuthenticationException
+|  |- D365TokenAcquisitionException
 |  |- D365TransportException
 |  |- D365ProtocolException
 |  `- D365SerializationException
@@ -44,14 +45,14 @@ Exception
 
 `D365OperationCanceledException` deliberately remains an `OperationCanceledException`. Catch it before a broad cancellation handler only when mutation outcome is needed.
 
-Authentication authority libraries can also throw their native exceptions while obtaining a token before a D365 request is sent. These still fail closed; do not convert them into an empty read.
+MSAL acquisition failures before a D365 request is sent are wrapped in `D365TokenAcquisitionException`. The original MSAL exception remains available through `InnerException`. Caller cancellation is not wrapped.
 
 ## Failure Kinds
 
 | `D365FailureKind` | Meaning |
 | --- | --- |
 | `Http` | D365 returned a non-success HTTP response |
-| `Authentication` | Final D365 HTTP response is 401 after one refresh attempt |
+| `Authentication` | Token acquisition failed, or the final D365 HTTP response is 401 after one refresh attempt |
 | `Transport` | No HTTP response was available because transport/read failed |
 | `Timeout` | The package request timeout elapsed |
 | `Serialization` | JSON was invalid or could not be converted to the requested model |
@@ -97,6 +98,8 @@ catch (D365HttpException exception)
 The following statuses are marked transient: 408, 429, 500, 502, 503, and 504. `IsTransient` does not mean a mutation is safe to retry.
 
 ## Authentication Errors
+
+If MSAL cannot acquire an Azure AD or Managed Identity token, the client throws `D365TokenAcquisitionException`. Its `AuthType` identifies the selected authentication method without placing a client ID, secret, or token in the package's exception message.
 
 The transport performs one compare-and-refresh cycle only after receiving a real HTTP 401. If the second D365 response is still 401:
 

@@ -7,6 +7,7 @@ using FlintsLabs.D365.ODataClient.Tests.TestInfrastructure;
 using FlintsLabs.D365.ODataClient.Transport;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Identity.Client;
 using Moq;
 
 namespace FlintsLabs.D365.ODataClient.Tests.UnitTests.Authentication;
@@ -122,11 +123,15 @@ public class D365AuthenticationTests
     public async Task TokenProvider_ConcurrentRejectedTokenRefreshUsesSingleAuthorityCall()
     {
         var acquisitionCount = 0;
+        var forceRefreshValues = new List<bool>();
         var provider = new D365AccessTokenProvider(
             NullLogger<D365AccessTokenProvider>.Instance,
             new D365ClientOptions(),
-            async cancellationToken =>
+            async (forceRefresh, cancellationToken) =>
             {
+                lock (forceRefreshValues)
+                    forceRefreshValues.Add(forceRefresh);
+
                 var sequence = Interlocked.Increment(ref acquisitionCount);
                 await Task.Delay(20, cancellationToken);
                 return new D365AccessToken($"token-{sequence}", DateTimeOffset.UtcNow.AddHours(1));
@@ -140,6 +145,30 @@ public class D365AuthenticationTests
         Assert.Equal("token-1", staleToken.Value);
         Assert.Equal(2, acquisitionCount);
         Assert.All(refreshedTokens, token => Assert.Equal("token-2", token.Value));
+        Assert.Equal([false, true], forceRefreshValues);
+    }
+
+    [Fact]
+    public async Task TokenProvider_ConcurrentCallersUseOneNonForcedAcquisition()
+    {
+        var acquisitionCount = 0;
+        var provider = new D365AccessTokenProvider(
+            NullLogger<D365AccessTokenProvider>.Instance,
+            new D365ClientOptions(),
+            async (forceRefresh, cancellationToken) =>
+            {
+                Assert.False(forceRefresh);
+                Interlocked.Increment(ref acquisitionCount);
+                await Task.Delay(20, cancellationToken);
+                return new D365AccessToken("shared-token", DateTimeOffset.UtcNow.AddHours(1));
+            });
+
+        var tokens = await Task.WhenAll(
+            Enumerable.Range(0, 20)
+                .Select(_ => provider.GetAccessTokenAsync().AsTask()));
+
+        Assert.Equal(1, acquisitionCount);
+        Assert.All(tokens, token => Assert.Equal("shared-token", token.Value));
     }
 
     [Fact]
@@ -149,7 +178,7 @@ public class D365AuthenticationTests
         var provider = new D365AccessTokenProvider(
             NullLogger<D365AccessTokenProvider>.Instance,
             new D365ClientOptions(),
-            async cancellationToken =>
+            async (_, cancellationToken) =>
             {
                 acquisitionStarted.SetResult();
                 await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
@@ -162,6 +191,35 @@ public class D365AuthenticationTests
         cancellation.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => tokenTask);
+    }
+
+    [Fact]
+    public async Task TokenProvider_WrapsMsalFailureWithoutCredentialData()
+    {
+        const string clientId = "11111111-1111-1111-1111-111111111111";
+        const string token = "sensitive-token-value";
+        const string secret = "sensitive-client-secret";
+        var msalException = new MsalClientException(
+            "managed_identity_unavailable",
+            $"Managed Identity {clientId} failed with {token} and {secret}");
+        var provider = new D365AccessTokenProvider(
+            NullLogger<D365AccessTokenProvider>.Instance,
+            new D365ClientOptions
+            {
+                AuthType = D365AuthType.ManagedIdentity,
+                ManagedIdentityClientId = clientId
+            },
+            (_, _) => ValueTask.FromException<D365AccessToken>(msalException));
+
+        var exception = await Assert.ThrowsAsync<D365TokenAcquisitionException>(() =>
+            provider.GetAccessTokenAsync().AsTask());
+
+        Assert.Equal(D365FailureKind.Authentication, exception.FailureKind);
+        Assert.Equal(D365AuthType.ManagedIdentity, exception.AuthType);
+        Assert.Same(msalException, exception.InnerException);
+        Assert.DoesNotContain(clientId, exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(token, exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(secret, exception.Message, StringComparison.Ordinal);
     }
 
     private static (D365Transport Transport, StubHttpMessageHandler Handler) CreateTransport(

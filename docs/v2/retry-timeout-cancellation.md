@@ -121,7 +121,7 @@ Caller cancellation throws `D365OperationCanceledException`, which derives from 
 Cancellation propagates through:
 
 - Token cache lock waiting.
-- Azure AD token acquisition.
+- Azure AD and Managed Identity token acquisition.
 - ADFS HTTP token request.
 - Request sending and response-body reading.
 - Retry delay.

@@ -1,14 +1,16 @@
 using System.Text.Json;
+using FlintsLabs.D365.ODataClient.Exceptions;
 using FlintsLabs.D365.ODataClient.Extensions;
 using FlintsLabs.D365.ODataClient.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Identity.Client;
+using Microsoft.Identity.Client.AppConfig;
 
 namespace FlintsLabs.D365.ODataClient.Services;
 
 /// <summary>
-/// Provides cached D365 access tokens for Azure AD or ADFS authentication.
+/// Provides cached D365 access tokens for Azure AD, Managed Identity, or ADFS authentication.
 /// </summary>
 internal sealed class D365AccessTokenProvider : ID365AccessTokenProvider
 {
@@ -17,7 +19,8 @@ internal sealed class D365AccessTokenProvider : ID365AccessTokenProvider
     private readonly ILogger<D365AccessTokenProvider> _logger;
     private readonly D365ClientOptions _options;
     private readonly IHttpClientFactory? _httpClientFactory;
-    private readonly Func<CancellationToken, ValueTask<D365AccessToken>> _acquireToken;
+    private readonly Func<bool, CancellationToken, ValueTask<D365AccessToken>> _acquireToken;
+    private readonly IManagedIdentityApplication? _managedIdentityApplication;
     private readonly SemaphoreSlim _tokenLock = new(1, 1);
     private D365AccessToken? _accessToken;
 
@@ -29,13 +32,14 @@ internal sealed class D365AccessTokenProvider : ID365AccessTokenProvider
         _logger = logger;
         _httpClientFactory = httpClientFactory;
         _options = options.Value;
+        _managedIdentityApplication = CreateManagedIdentityApplication(_options);
         _acquireToken = AcquireTokenAsync;
     }
 
     internal D365AccessTokenProvider(
         ILogger<D365AccessTokenProvider> logger,
         D365ClientOptions options,
-        Func<CancellationToken, ValueTask<D365AccessToken>> acquireToken)
+        Func<bool, CancellationToken, ValueTask<D365AccessToken>> acquireToken)
     {
         _logger = logger;
         _options = options;
@@ -59,7 +63,7 @@ internal sealed class D365AccessTokenProvider : ID365AccessTokenProvider
             if (IsTokenValid(cachedToken))
                 return cachedToken!;
 
-            return await AcquireAndCacheTokenAsync(cancellationToken).ConfigureAwait(false);
+            return await AcquireAndCacheTokenAsync(false, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -87,7 +91,7 @@ internal sealed class D365AccessTokenProvider : ID365AccessTokenProvider
             if (string.Equals(cachedToken?.Value, rejectedAccessToken, StringComparison.Ordinal))
                 Volatile.Write(ref _accessToken, null);
 
-            return await AcquireAndCacheTokenAsync(cancellationToken).ConfigureAwait(false);
+            return await AcquireAndCacheTokenAsync(true, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -96,9 +100,23 @@ internal sealed class D365AccessTokenProvider : ID365AccessTokenProvider
     }
 
     private async ValueTask<D365AccessToken> AcquireAndCacheTokenAsync(
+        bool forceRefresh,
         CancellationToken cancellationToken)
     {
-        var token = await _acquireToken(cancellationToken).ConfigureAwait(false);
+        D365AccessToken token;
+        try
+        {
+            token = await _acquireToken(forceRefresh, cancellationToken).ConfigureAwait(false);
+        }
+        catch (MsalException exception)
+        {
+            throw new D365TokenAcquisitionException(
+                "D365 access token acquisition failed for the selected authentication method.",
+                _options.AuthType,
+                exception is MsalServiceException { IsRetryable: true },
+                exception);
+        }
+
         if (string.IsNullOrWhiteSpace(token.Value))
             throw new InvalidOperationException("The token authority returned an empty access token.");
 
@@ -113,13 +131,61 @@ internal sealed class D365AccessTokenProvider : ID365AccessTokenProvider
                && DateTimeOffset.UtcNow.Add(RefreshBuffer) < token.ExpiresOn;
     }
 
-    private ValueTask<D365AccessToken> AcquireTokenAsync(CancellationToken cancellationToken)
+    private ValueTask<D365AccessToken> AcquireTokenAsync(
+        bool forceRefresh,
+        CancellationToken cancellationToken)
     {
         return _options.AuthType switch
         {
             D365AuthType.ADFS => GetAdfsTokenAsync(cancellationToken),
+            D365AuthType.ManagedIdentity => GetManagedIdentityTokenAsync(forceRefresh, cancellationToken),
             _ => GetAzureAdTokenAsync(cancellationToken)
         };
+    }
+
+    private static IManagedIdentityApplication? CreateManagedIdentityApplication(
+        D365ClientOptions options)
+    {
+        if (options.AuthType != D365AuthType.ManagedIdentity)
+            return null;
+
+        var managedIdentityId = string.IsNullOrWhiteSpace(options.ManagedIdentityClientId)
+            ? ManagedIdentityId.SystemAssigned
+            : ManagedIdentityId.WithUserAssignedClientId(options.ManagedIdentityClientId);
+
+        return ManagedIdentityApplicationBuilder
+            .Create(managedIdentityId)
+            .Build();
+    }
+
+    private async ValueTask<D365AccessToken> GetManagedIdentityTokenAsync(
+        bool forceRefresh,
+        CancellationToken cancellationToken)
+    {
+        TryLog(() => _logger.LogDebug("Acquiring D365 access token using Managed Identity"));
+
+        var resource = !string.IsNullOrWhiteSpace(_options.Scope)
+            ? _options.Scope
+            : string.IsNullOrWhiteSpace(_options.Resource)
+                ? null
+                : _options.Resource.TrimEnd('/') + "/.default";
+
+        if (string.IsNullOrWhiteSpace(resource))
+        {
+            throw new InvalidOperationException(
+                "Scope or Resource is required for Managed Identity authentication.");
+        }
+
+        var application = _managedIdentityApplication
+                          ?? throw new InvalidOperationException(
+                              "Managed Identity authentication is not initialized.");
+        var result = await application
+            .AcquireTokenForManagedIdentity(resource)
+            .WithForceRefresh(forceRefresh)
+            .ExecuteAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        return new D365AccessToken(result.AccessToken, result.ExpiresOn);
     }
 
     private async ValueTask<D365AccessToken> GetAzureAdTokenAsync(

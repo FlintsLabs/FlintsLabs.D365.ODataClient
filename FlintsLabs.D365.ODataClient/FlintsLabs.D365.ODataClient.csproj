@@ -12,19 +12,19 @@
         
         <!-- NuGet Package Info -->
         <PackageId>FlintsLabs.D365.ODataClient</PackageId>
-        <Version>2.0.0</Version>
+        <Version>2.1.0</Version>
         <Authors>FlintsLabs</Authors>
         <Company>FlintsLabs</Company>
         <Product>D365 OData Client</Product>
-        <Description>Fail-closed fluent OData client for Microsoft Dynamics 365 Finance and Operations and Dataverse. Provides strongly typed LINQ queries, CRUD responses, typed failures, validated pagination, named clients, and shared token management for Azure AD and ADFS.</Description>
-        <PackageTags>D365;OData;Dynamics365;FluentAPI;FinanceOperations;FO;SCM;ADFS;AzureAD</PackageTags>
+        <Description>Fail-closed fluent OData client for Microsoft Dynamics 365 Finance and Operations and Dataverse. Provides strongly typed LINQ queries, CRUD responses, typed failures, validated pagination, named clients, and shared token management for Azure AD, Managed Identity, and ADFS.</Description>
+        <PackageTags>D365;OData;Dynamics365;FluentAPI;FinanceOperations;FO;SCM;ADFS;AzureAD;ManagedIdentity</PackageTags>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageIcon>icon.png</PackageIcon>
         <PackageProjectUrl>https://github.com/FlintsLabs/FlintsLabs.D365.ODataClient</PackageProjectUrl>
         <RepositoryUrl>https://github.com/FlintsLabs/FlintsLabs.D365.ODataClient</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
-        <PackageReleaseNotes>2.0.0 is a breaking fail-closed release. High-level reads and mutations preserve HTTP, authentication, transport, timeout, protocol, and serialization failures instead of returning default values. It adds D365Response, typed exceptions, mutation outcomes, strict counts, validated pagination, bounded read retries, cancellation, named singleton clients, and single-flight token refresh. Migration guide: https://github.com/FlintsLabs/FlintsLabs.D365.ODataClient/blob/v2.0.0/docs/v2/migration-from-v1.md</PackageReleaseNotes>
+        <PackageReleaseNotes>2.1.0 adds explicit System-assigned and User-assigned Azure Managed Identity authentication through the fluent API, shared MSAL caching, force refresh after an actual D365 HTTP 401, and typed token-acquisition failures. Client-secret Azure AD and ADFS authentication remain supported with no automatic fallback. Authentication guide: https://github.com/FlintsLabs/FlintsLabs.D365.ODataClient/blob/main/docs/v2/authentication-and-parallelism.md</PackageReleaseNotes>
         
         <!-- Package settings -->
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>

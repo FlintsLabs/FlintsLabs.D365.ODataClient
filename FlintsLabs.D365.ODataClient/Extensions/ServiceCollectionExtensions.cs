@@ -151,6 +151,7 @@ public static class ServiceCollectionExtensions
             UseJitter = source.Retry.UseJitter
         };
         destination.AuthType = source.AuthType;
+        destination.ManagedIdentityClientId = source.ManagedIdentityClientId;
         destination.BooleanFormatting = source.BooleanFormatting;
         destination.Scope = source.Scope;
         destination.HttpClientName = source.HttpClientName;

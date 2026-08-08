@@ -34,6 +34,39 @@ services.AddD365ODataClient("Sales", d365 => d365
     .WithClientSecret(clientSecret));
 ```
 
+## Azure Managed Identity
+
+Managed Identity is selected explicitly in application code. System-assigned example:
+
+```csharp
+services.AddD365ODataClient("Finance", d365 => d365
+    .UseSystemAssignedManagedIdentity()
+    .WithResource("https://contoso.operations.dynamics.com"));
+```
+
+User-assigned example:
+
+```csharp
+services.AddD365ODataClient("Finance", d365 => d365
+    .UseUserAssignedManagedIdentity(managedIdentityClientId)
+    .WithResource("https://contoso.operations.dynamics.com"));
+```
+
+`managedIdentityClientId` is the User-assigned identity's application (client) ID and must be a non-empty GUID. It is not the object/principal ID or Azure resource ID. Calling another authentication selector later changes the selected mode; calling `UseSystemAssignedManagedIdentity()` also clears a previously selected User-assigned client ID.
+
+The hosting Azure resource must have the selected identity attached. D365 F&O must also register that identity's application (client) ID and map it to the intended dedicated user.
+
+Scope selection follows the same rule as Azure AD client credentials:
+
+- Explicit `WithScope(scope)` wins.
+- Otherwise the client uses `Resource.TrimEnd('/') + "/.default"`.
+
+Each named client builds one MSAL Managed Identity application so its MSAL cache is shared with that client's package token cache. Normal acquisition uses `WithForceRefresh(false)`. After D365 returns an actual 401, the one permitted refresh uses `WithForceRefresh(true)` and the transport retries the D365 request once.
+
+There is no automatic fallback to client-secret authentication. `FromConfiguration()` continues to select only Azure AD client-secret or ADFS authentication; choose Managed Identity with one of the fluent selectors above.
+
+MSAL acquisition failures are exposed as `D365TokenAcquisitionException` with `FailureKind = Authentication` and the selected `AuthType`. The original MSAL exception is retained as `InnerException`; the package's outer message does not include an access token, client ID, or secret. Caller cancellation remains an `OperationCanceledException` and is not wrapped.
+
 ## ADFS
 
 The retained on-premises flow posts form fields to the configured token endpoint:
@@ -57,7 +90,7 @@ services.AddD365ODataClient("OnPrem", d365 => d365
     .WithGrantType("client_credentials"));
 ```
 
-ADFS deployments vary. Verify that the authority supports this client-credential/resource form with the environment owner. Version 2.0.0 keeps the existing flow rather than introducing an unverified on-premises protocol change.
+ADFS deployments vary. Verify that the authority supports this client-credential/resource form with the environment owner. Version 2.x keeps the existing flow rather than introducing an unverified on-premises protocol change.
 
 The ADFS call uses a named `HttpClient` from `IHttpClientFactory`; it does not create a new unmanaged client for every token acquisition.
 
@@ -150,9 +183,10 @@ The caller token reaches MSAL execution, ADFS HTTP calls, token-lock waiting, D3
 
 ## Secret Handling
 
+- Prefer Managed Identity on supported Azure workloads to avoid storing a client secret.
 - Use an external secret provider.
 - Never log client secrets or access tokens.
 - Rotate any secret exposed in source, logs, chat, or configuration exports.
-- Remember that version 2.0.0 accepts all TLS server certificates; authentication secrets are not protected from an active network attacker on an untrusted path.
+- Remember that version 2.x accepts all TLS server certificates; authentication secrets are not protected from an active network attacker on an untrusted path.
 
 See [Security and logging](security-and-logging.md).

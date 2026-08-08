@@ -3,7 +3,7 @@
 ## Install
 
 ```bash
-dotnet add package FlintsLabs.D365.ODataClient --version 2.0.0
+dotnet add package FlintsLabs.D365.ODataClient --version 2.1.0
 ```
 
 The package targets .NET 8 and .NET 10 and integrates with `Microsoft.Extensions.DependencyInjection`.

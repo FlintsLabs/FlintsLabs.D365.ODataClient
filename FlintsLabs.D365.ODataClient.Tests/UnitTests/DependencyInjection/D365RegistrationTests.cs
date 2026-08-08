@@ -92,6 +92,23 @@ public class D365RegistrationTests
     }
 
     [Fact]
+    public void NamedOptions_PreserveManagedIdentityClientId()
+    {
+        const string clientId = "11111111-1111-1111-1111-111111111111";
+        var services = new ServiceCollection();
+        services.AddD365ODataClient("Managed", builder => builder
+            .UseUserAssignedManagedIdentity(clientId)
+            .WithResource("https://managed.example.test"));
+        using var provider = services.BuildServiceProvider();
+
+        var options = provider.GetRequiredService<IOptionsMonitor<D365ClientOptions>>()
+            .Get("Managed");
+
+        Assert.Equal(D365AuthType.ManagedIdentity, options.AuthType);
+        Assert.Equal(clientId, options.ManagedIdentityClientId);
+    }
+
+    [Fact]
     public void Entity_ReturnsFreshQueryBuilders()
     {
         using var provider = BuildProvider("Cloud", "https://cloud.example.test");

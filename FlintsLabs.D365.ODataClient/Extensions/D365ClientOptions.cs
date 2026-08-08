@@ -15,7 +15,12 @@ public enum D365AuthType
     /// <summary>
     /// ADFS - Active Directory Federation Services (On-Premise D365)
     /// </summary>
-    ADFS
+    ADFS,
+
+    /// <summary>
+    /// Azure Managed Identity (System-assigned or User-assigned)
+    /// </summary>
+    ManagedIdentity
 }
 
 /// <summary>
@@ -31,6 +36,7 @@ public class D365ClientBuilder
     public D365ClientBuilder UseAzureAD()
     {
         Options.AuthType = D365AuthType.AzureAD;
+        Options.ManagedIdentityClientId = null;
         return this;
     }
     
@@ -40,6 +46,37 @@ public class D365ClientBuilder
     public D365ClientBuilder UseADFS()
     {
         Options.AuthType = D365AuthType.ADFS;
+        Options.ManagedIdentityClientId = null;
+        return this;
+    }
+
+    /// <summary>
+    /// Use the System-assigned Managed Identity attached to the current Azure workload.
+    /// </summary>
+    public D365ClientBuilder UseSystemAssignedManagedIdentity()
+    {
+        Options.AuthType = D365AuthType.ManagedIdentity;
+        Options.ManagedIdentityClientId = null;
+        return this;
+    }
+
+    /// <summary>
+    /// Use a User-assigned Managed Identity attached to the current Azure workload.
+    /// </summary>
+    /// <param name="clientId">The Managed Identity application (client) ID.</param>
+    public D365ClientBuilder UseUserAssignedManagedIdentity(string clientId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(clientId);
+
+        if (!Guid.TryParse(clientId, out _))
+        {
+            throw new ArgumentException(
+                "Managed Identity client ID must be a valid GUID.",
+                nameof(clientId));
+        }
+
+        Options.AuthType = D365AuthType.ManagedIdentity;
+        Options.ManagedIdentityClientId = clientId;
         return this;
     }
 
@@ -185,10 +222,10 @@ public class D365ClientBuilder
         bool hasTokenEndpoint = !string.IsNullOrWhiteSpace(Options.TokenEndpoint);
         bool isTenantGuid = Guid.TryParse(Options.TenantId, out _);
 
-        if (isExplicitAdfs || (hasTokenEndpoint && !isTenantGuid))
-        {
-            Options.AuthType = D365AuthType.ADFS;
-        }
+        Options.AuthType = isExplicitAdfs || (hasTokenEndpoint && !isTenantGuid)
+            ? D365AuthType.ADFS
+            : D365AuthType.AzureAD;
+        Options.ManagedIdentityClientId = null;
         
         return this;
     }
@@ -240,10 +277,16 @@ public class D365ClientOptions
     public D365RetryOptions Retry { get; set; } = new();
 
     /// <summary>
-    /// Authentication type: AzureAD or ADFS
+    /// Authentication type: AzureAD, ADFS, or ManagedIdentity
     /// Default: AzureAD
     /// </summary>
     public D365AuthType AuthType { get; set; } = D365AuthType.AzureAD;
+
+    /// <summary>
+    /// User-assigned Managed Identity application (client) ID.
+    /// Null selects the System-assigned Managed Identity.
+    /// </summary>
+    public string? ManagedIdentityClientId { get; set; }
     
     /// <summary>
     /// Boolean Formatting Strategy (NoYesEnum vs Literal)

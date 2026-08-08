@@ -12,7 +12,7 @@ Version 2 is a breaking, fail-closed release. High-level reads and mutations no 
 ## Highlights
 
 - Fluent `D365Query<T>` API with LINQ-to-OData translation.
-- Azure AD / Microsoft Entra ID client credentials and ADFS client credentials.
+- Azure AD / Microsoft Entra ID client credentials, Azure Managed Identity, and ADFS client credentials.
 - Named clients for multiple F&O and Dataverse endpoints.
 - Typed exceptions with HTTP status, D365 error details, request ID, retry guidance, and mutation outcome.
 - Explicit raw HTTP responses through `ID365Client.SendAsync`.
@@ -26,17 +26,18 @@ Version 2 is a breaking, fail-closed release. High-level reads and mutations no 
 
 | Package | Target frameworks | D365 endpoints |
 | --- | --- | --- |
+| 2.1.0 | .NET 8 and .NET 10 | F&O OData and Dataverse Web API with Azure AD client credentials or Managed Identity; existing ADFS client-credential deployments |
 | 2.0.0 | .NET 8 and .NET 10 | F&O OData, Dataverse Web API, and existing ADFS client-credential deployments |
 
 ## Installation
 
 ```bash
-dotnet add package FlintsLabs.D365.ODataClient --version 2.0.0
+dotnet add package FlintsLabs.D365.ODataClient --version 2.1.0
 ```
 
 ## Security Notice
 
-Version 2.0.0 preserves the package's existing TLS behavior for compatibility: the registered D365 and authentication HTTP handlers accept any server certificate. This disables certificate-chain and hostname validation and is unsafe on untrusted networks. Use the package only on a trusted network path while this compatibility behavior remains, and do not treat TLS peer identity as verified.
+Version 2.1.0 continues to preserve the package's existing TLS behavior for compatibility: the registered D365 and authentication HTTP handlers accept any server certificate. This disables certificate-chain and hostname validation and is unsafe on untrusted networks. Use the package only on a trusted network path while this compatibility behavior remains, and do not treat TLS peer identity as verified.
 
 See [Security and logging](docs/v2/security-and-logging.md) before production deployment. Never commit client secrets or log `D365Response.RawBody` / `D365Exception.ResponseBody` without application-level redaction.
 
@@ -114,6 +115,28 @@ builder.Services.AddD365ODataClient(d365 => d365
 ```
 
 If `WithScope(...)` is not supplied, Azure AD uses `Resource + "/.default"`.
+
+### Azure Managed Identity for F&O
+
+Use the System-assigned identity attached to the Azure workload:
+
+```csharp
+builder.Services.AddD365ODataClient(d365 => d365
+    .UseSystemAssignedManagedIdentity()
+    .WithResource("https://contoso.operations.dynamics.com"));
+```
+
+Or select an attached User-assigned identity by its application (client) ID:
+
+```csharp
+builder.Services.AddD365ODataClient(d365 => d365
+    .UseUserAssignedManagedIdentity(managedIdentityClientId)
+    .WithResource("https://contoso.operations.dynamics.com"));
+```
+
+Managed Identity authentication is selected only through the fluent API; `FromConfiguration()` continues to configure Azure AD client-secret or ADFS authentication. There is no fallback from Managed Identity to a client secret. If `WithScope(...)` is omitted, the token resource is `Resource + "/.default"`.
+
+The identity must be attached to the hosting Azure workload, and its application (client) ID must be registered and mapped to the intended D365 F&O user. For a User-assigned identity, pass the client ID, not its object/principal ID or Azure resource ID.
 
 ### ADFS
 

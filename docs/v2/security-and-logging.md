@@ -1,10 +1,10 @@
 # Security and Logging
 
-This guide defines what the package redacts, what remains the caller's responsibility, and the known TLS risk in version 2.0.0.
+This guide defines what the package redacts, what remains the caller's responsibility, and the known TLS risk in version 2.x.
 
 ## Critical TLS Caveat
 
-Version 2.0.0 registers both the D365 API and authentication `HttpClient` handlers with a certificate-validation callback that returns `true` for every server certificate.
+Version 2.x registers both the D365 API and authentication `HttpClient` handlers with a certificate-validation callback that returns `true` for every server certificate.
 
 Consequences:
 
@@ -14,9 +14,9 @@ Consequences:
 - HTTPS encryption alone does not prove the identity of D365, Azure AD, or ADFS.
 - An active attacker on the network path could intercept access tokens, client credentials, request bodies, and D365 responses.
 
-This behavior is intentionally preserved from version 1 for 2.0.0 compatibility; it is not a secure default and is not a recommendation.
+This behavior is intentionally preserved from version 1 for version 2 compatibility; it is not a secure default and is not a recommendation.
 
-Operational requirements while using 2.0.0:
+Operational requirements while using version 2.x:
 
 1. Use only a trusted and controlled network path.
 2. Restrict application egress to the expected D365 and authority endpoints.
@@ -25,7 +25,7 @@ Operational requirements while using 2.0.0:
 5. Record this exception in the deployment's security risk register.
 6. Plan a package upgrade/remediation that restores normal certificate validation.
 
-If certificate validation is mandatory for the environment, do not deploy version 2.0.0 without an independently reviewed transport remediation. The public builder currently does not expose a certificate-policy switch.
+If certificate validation is mandatory for the environment, do not deploy version 2.x without an independently reviewed transport remediation. The public builder currently does not expose a certificate-policy switch.
 
 ## Package Logging Contract
 
