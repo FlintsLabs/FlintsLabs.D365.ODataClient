@@ -36,7 +36,7 @@ services.AddD365ODataClient("Sales", d365 => d365
 
 ## Azure Managed Identity
 
-Managed Identity is selected explicitly in application code. System-assigned example:
+Managed Identity can be selected explicitly in application code. System-assigned example:
 
 ```csharp
 services.AddD365ODataClient("Finance", d365 => d365
@@ -63,7 +63,23 @@ Scope selection follows the same rule as Azure AD client credentials:
 
 Each named client builds one MSAL Managed Identity application so its MSAL cache is shared with that client's package token cache. Normal acquisition uses `WithForceRefresh(false)`. After D365 returns an actual 401, the one permitted refresh uses `WithForceRefresh(true)` and the transport retries the D365 request once.
 
-There is no automatic fallback to client-secret authentication. `FromConfiguration()` continues to select only Azure AD client-secret or ADFS authentication; choose Managed Identity with one of the fluent selectors above.
+Version 2.2.0 also supports configuration-driven selection:
+
+```json
+{
+  "D365Dataverse": {
+    "AuthType": "ManagedIdentity",
+    "ManagedIdentityClientId": "00000000-0000-0000-0000-000000000000",
+    "Resource": "https://contoso.api.crm5.dynamics.com",
+    "OrganizationUrl": "https://contoso.api.crm5.dynamics.com/api/data/v9.2",
+    "Scope": "https://contoso.api.crm5.dynamics.com/.default"
+  }
+}
+```
+
+Omitting `ManagedIdentityClientId` selects System-assigned Managed Identity. Managed Identity configuration requires `Scope` or `Resource` for token acquisition but does not require or retain `ClientId`, `ClientSecret`, or `TenantId`.
+
+There is no automatic fallback to client-secret authentication. Explicit `AuthType` accepts only the named values `AzureAD`, `ADFS`, and `ManagedIdentity` (case-insensitive); invalid, empty, or numeric values fail during registration. If `AuthType` is absent, legacy Azure AD/ADFS detection remains in effect.
 
 MSAL acquisition failures are exposed as `D365TokenAcquisitionException` with `FailureKind = Authentication` and the selected `AuthType`. The original MSAL exception is retained as `InnerException`; the package's outer message does not include an access token, client ID, or secret. Caller cancellation remains an `OperationCanceledException` and is not wrapped.
 

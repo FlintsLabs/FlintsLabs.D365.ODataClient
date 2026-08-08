@@ -30,8 +30,8 @@ The runnable source examples are in [the v2 sample project](../../samples/Flints
 
 ## Supported Targets
 
-The 2.1.0 package targets `net8.0` and `net10.0`.
+The 2.2.0 package targets `net8.0` and `net10.0`.
 
 ## Security Boundary
 
-Version 2.1.0 continues to preserve the previous permissive server-certificate callback for compatibility. It accepts all server certificates for D365 and authentication requests. Read [Security and logging](security-and-logging.md) and deploy only across a trusted network path until this behavior is remediated.
+Version 2.2.0 continues to preserve the previous permissive server-certificate callback for compatibility. It accepts all server certificates for D365 and authentication requests. Read [Security and logging](security-and-logging.md) and deploy only across a trusted network path until this behavior is remediated.

@@ -12,7 +12,7 @@
         
         <!-- NuGet Package Info -->
         <PackageId>FlintsLabs.D365.ODataClient</PackageId>
-        <Version>2.1.0</Version>
+        <Version>2.2.0</Version>
         <Authors>FlintsLabs</Authors>
         <Company>FlintsLabs</Company>
         <Product>D365 OData Client</Product>
@@ -24,7 +24,7 @@
         <PackageProjectUrl>https://github.com/FlintsLabs/FlintsLabs.D365.ODataClient</PackageProjectUrl>
         <RepositoryUrl>https://github.com/FlintsLabs/FlintsLabs.D365.ODataClient</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
-        <PackageReleaseNotes>2.1.0 adds explicit System-assigned and User-assigned Azure Managed Identity authentication through the fluent API, shared MSAL caching, force refresh after an actual D365 HTTP 401, and typed token-acquisition failures. Client-secret Azure AD and ADFS authentication remain supported with no automatic fallback. Authentication guide: https://github.com/FlintsLabs/FlintsLabs.D365.ODataClient/blob/main/docs/v2/authentication-and-parallelism.md</PackageReleaseNotes>
+        <PackageReleaseNotes>2.2.0 adds strict configuration-driven Azure Managed Identity selection through AuthType and ManagedIdentityClientId. Managed Identity configuration no longer requires or retains ClientId, ClientSecret, or TenantId, while existing Azure AD/ADFS configuration and legacy detection remain supported. There is no authentication fallback. Authentication guide: https://github.com/FlintsLabs/FlintsLabs.D365.ODataClient/blob/main/docs/v2/authentication-and-parallelism.md</PackageReleaseNotes>
         
         <!-- Package settings -->
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>

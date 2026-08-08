@@ -1,6 +1,6 @@
 # Security and Logging
 
-This guide defines what the package redacts, what remains the caller's responsibility, and the known TLS risk in version 2.x.
+This guide defines what the package redacts, what remains the caller's responsibility, and the known TLS risk in version 2.x, including 2.2.0.
 
 ## Critical TLS Caveat
 

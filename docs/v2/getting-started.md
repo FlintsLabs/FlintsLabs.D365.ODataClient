@@ -3,7 +3,7 @@
 ## Install
 
 ```bash
-dotnet add package FlintsLabs.D365.ODataClient --version 2.1.0
+dotnet add package FlintsLabs.D365.ODataClient --version 2.2.0
 ```
 
 The package targets .NET 8 and .NET 10 and integrates with `Microsoft.Extensions.DependencyInjection`.
@@ -49,6 +49,7 @@ Without `OrganizationUrl`, the OData base is `Resource + "/data/"`. Without an e
 {
   "D365": {
     "Sales": {
+      "AuthType": "AzureAD",
       "TenantId": "00000000-0000-0000-0000-000000000000",
       "ClientId": "00000000-0000-0000-0000-000000000000",
       "ClientSecret": "load-from-a-secret-provider",
@@ -74,7 +75,21 @@ builder.Services.AddD365ODataClient(
     "D365:Sales");
 ```
 
-Configuration auto-detects ADFS when `TenantId` is `adfs`, or when a token endpoint is present and the tenant value is not a GUID. Prefer explicit fluent `UseADFS()` when constructing configuration in code.
+Version 2.2.0 also supports secretless User-assigned Managed Identity configuration:
+
+```json
+{
+  "D365": {
+    "Finance": {
+      "AuthType": "ManagedIdentity",
+      "ManagedIdentityClientId": "00000000-0000-0000-0000-000000000000",
+      "Resource": "https://contoso.operations.dynamics.com"
+    }
+  }
+}
+```
+
+Omit `ManagedIdentityClientId` for System-assigned Managed Identity. Explicit `AuthType` accepts only `AzureAD`, `ADFS`, or `ManagedIdentity` names and never falls back. When `AuthType` is absent, configuration continues to auto-detect ADFS when `TenantId` is `adfs`, or when a token endpoint is present and the tenant value is not a GUID.
 
 ## Define an Entity
 
