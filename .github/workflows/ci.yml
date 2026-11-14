@@ -1,0 +1,59 @@
+name: Build and Test
+
+on:
+  pull_request:
+  push:
+    branches: [main, 'codex/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / ${{ matrix.framework }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        framework: [net8.0, net10.0]
+    env:
+      D365_RUN_INTEGRATION_TESTS: 'false'
+      DOTNET_NOLOGO: 'true'
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDKs and runtimes
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Restore tests and examples
+        run: |
+          dotnet restore FlintsLabs.D365.ODataClient.Tests/FlintsLabs.D365.ODataClient.Tests.csproj
+          dotnet restore samples/FlintsLabs.D365.ODataClient.V2.Examples/FlintsLabs.D365.ODataClient.V2.Examples.csproj
+
+      - name: Run non-integration tests including TLS and redirect regression tests
+        run: dotnet test FlintsLabs.D365.ODataClient.Tests/FlintsLabs.D365.ODataClient.Tests.csproj -c Release -f ${{ matrix.framework }} --no-restore --filter "Category!=Integration" --logger "trx;LogFileName=tests.trx" --results-directory TestResults
+
+      - name: Build compiled examples
+        run: dotnet build samples/FlintsLabs.D365.ODataClient.V2.Examples/FlintsLabs.D365.ODataClient.V2.Examples.csproj -c Release --no-restore
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tests-${{ matrix.os }}-${{ matrix.framework }}
+          path: TestResults/*.trx
+          if-no-files-found: warn

@@ -13,7 +13,7 @@ Version 2 changes the package's reliability contract: a high-level call either r
 | [Retry, timeout, and cancellation](retry-timeout-cancellation.md) | Read retries and ambiguous writes |
 | [Authentication and parallelism](authentication-and-parallelism.md) | Azure AD, Managed Identity, ADFS, named clients, token sharing |
 | [Queries and pagination](query-and-pagination.md) | LINQ translation, keys, counts, and next links |
-| [Security and logging](security-and-logging.md) | TLS caveat, redaction, and safe diagnostics |
+| [Security and logging](security-and-logging.md) | TLS validation, affected releases, redaction, and safe diagnostics |
 | [BioWMS recovery pattern](biowms-recovery-pattern.md) | Exact preflight and reconciliation workflow |
 
 The runnable source examples are in [the v2 sample project](../../samples/FlintsLabs.D365.ODataClient.V2.Examples/Program.cs).
@@ -30,8 +30,8 @@ The runnable source examples are in [the v2 sample project](../../samples/Flints
 
 ## Supported Targets
 
-The 2.2.0 package targets `net8.0` and `net10.0`.
+The 2.2.1 package targets `net8.0` and `net10.0`.
 
 ## Security Boundary
 
-Version 2.2.0 continues to preserve the previous permissive server-certificate callback for compatibility. It accepts all server certificates for D365 and authentication requests. Read [Security and logging](security-and-logging.md) and deploy only across a trusted network path until this behavior is remediated.
+Version 2.2.0 accepts all server certificates for its named D365 API and ADFS authentication clients. Upgrade to 2.2.1 or later for platform TLS validation, HTTPS/same-origin enforcement, and disabled automatic redirects. See [Security and logging](security-and-logging.md) for compatibility requirements and verification.

@@ -39,9 +39,9 @@ internal sealed record D365Request(
             headers ?? new Dictionary<string, string>());
     }
 
-    public HttpRequestMessage CreateMessage(string accessToken)
+    public HttpRequestMessage CreateMessage(string accessToken, Uri requestUri)
     {
-        var request = new HttpRequestMessage(Method, RelativeOrAbsoluteUrl);
+        var request = new HttpRequestMessage(Method, requestUri);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 

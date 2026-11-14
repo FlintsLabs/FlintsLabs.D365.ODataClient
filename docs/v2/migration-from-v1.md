@@ -207,4 +207,4 @@ Read retry is disabled by default. If enabled, only GET/HEAD are retried for the
 7. Review every POST/PATCH/DELETE retry for exact-key reconciliation.
 8. Verify all Dataverse GUID keys use `Guid`.
 9. Run unit tests for 401, 404, 429, 500, timeout, malformed JSON, and second-page failure.
-10. Review the version 2 TLS warning before production rollout.
+10. Upgrade to 2.2.1 or later and review the [TLS validation and affected-release guidance](security-and-logging.md) before production rollout. Use trusted certificates with matching hostnames and valid dates, final HTTPS endpoints without redirects, and a separate named client for each API origin. Installed 2.2.0 packages remain affected until upgraded.

@@ -232,6 +232,7 @@ public class D365ClientBuilder
         }
 
         ValidateRequiredFields(sectionName);
+        FlintsLabs.D365.ODataClient.Transport.D365EndpointPolicy.ValidateConfiguration(Options);
         
         return this;
     }

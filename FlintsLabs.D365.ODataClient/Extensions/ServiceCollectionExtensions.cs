@@ -1,5 +1,6 @@
 using FlintsLabs.D365.ODataClient.Enums;
 using FlintsLabs.D365.ODataClient.Services;
+using FlintsLabs.D365.ODataClient.Transport;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -32,6 +33,7 @@ public static class ServiceCollectionExtensions
         if (builder.Options.Retry is null)
             throw new InvalidOperationException("D365 Retry options are not configured.");
         builder.Options.Retry.Validate();
+        D365EndpointPolicy.ValidateConfiguration(builder.Options);
 
         var snapshot = CloneOptions(builder.Options);
         snapshot.HttpClientName = $"D365Endpoint_{name}";
@@ -52,20 +54,19 @@ public static class ServiceCollectionExtensions
                 LogLevel.Warning);
         });
 
+        // Use the platform handler's normal certificate-chain, hostname and lifetime validation.
         services.AddHttpClient(snapshot.HttpClientName, client =>
             {
-                var baseUrl = snapshot.GetBaseUrl();
-                if (!string.IsNullOrWhiteSpace(baseUrl))
-                    client.BaseAddress = new Uri(baseUrl);
+                client.BaseAddress = D365EndpointPolicy.GetApiBaseUri(snapshot);
                 client.Timeout = Timeout.InfiniteTimeSpan;
             })
-            .ConfigurePrimaryHttpMessageHandler(CreatePermissiveHandler);
+            .ConfigurePrimaryHttpMessageHandler((handler, _) => DisableAutomaticRedirects(handler));
 
         services.AddHttpClient(snapshot.AuthHttpClientName, client =>
             {
                 client.Timeout = Timeout.InfiniteTimeSpan;
             })
-            .ConfigurePrimaryHttpMessageHandler(CreatePermissiveHandler);
+            .ConfigurePrimaryHttpMessageHandler((handler, _) => DisableAutomaticRedirects(handler));
 
         services.TryAddSingleton<ID365ClientFactory, D365ClientFactory>();
         services.TryAddSingleton<ID365Client>(serviceProvider =>
@@ -122,13 +123,21 @@ public static class ServiceCollectionExtensions
             sectionName);
     }
 
-    private static HttpMessageHandler CreatePermissiveHandler()
+    private static void DisableAutomaticRedirects(HttpMessageHandler handler)
     {
-        // Keep the existing TLS behavior for v2.0.0; see the security documentation.
-        return new HttpClientHandler
+        // Keep the platform handler's pooling and TLS defaults; never forward credentials/body
+        // to a Location destination, including POST-preserving 307/308 redirects.
+        switch (handler)
         {
-            ServerCertificateCustomValidationCallback = (_, _, _, _) => true
-        };
+            case SocketsHttpHandler sockets:
+                sockets.AllowAutoRedirect = false;
+                break;
+            case HttpClientHandler client:
+                client.AllowAutoRedirect = false;
+                break;
+            default:
+                throw new InvalidOperationException("D365 requires an HTTP handler with automatic redirects disabled.");
+        }
     }
 
     private static D365ClientOptions CloneOptions(D365ClientOptions source)

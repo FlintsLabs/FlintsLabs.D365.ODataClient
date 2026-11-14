@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [2.2.1] - 2026-11-15
+
+### Security
+- Restore platform TLS certificate validation for both named D365 API and ADFS authentication HTTP clients by removing the unconditional certificate-acceptance callback. Untrusted chains, hostname mismatches, and expired certificates are rejected before HTTP requests are sent.
+- Add local HTTPS regression tests for trusted and invalid certificates on both client registrations, without modifying the machine trust store.
+- Compatibility: private-CA/on-premises deployments must provide a trusted certificate chain and a matching, unexpired server certificate. There is no package option to disable validation. Version 2.2.0 remains affected; upgrade consumers to 2.2.1 or later.
+- Require absolute HTTPS for the effective D365 API endpoint and ADFS token endpoint, validated during registration/configuration and before use. Reject endpoint user information/fragments and API-base query strings without echoing input values. Preserve non-URL OAuth audiences when `OrganizationUrl` supplies the HTTPS API endpoint.
+- Restrict raw and high-level API requests to the configured HTTPS origin before token acquisition. Resolve and send the same validated absolute URI, including root-relative URLs; named `HttpClient.BaseAddress` overrides cannot redirect tokens to another origin. Rejected mutation URLs report `D365ProtocolException` with `NotSent`.
+- Reject custom query `Host` headers before token acquisition, preventing HTTP virtual-host/TLS SNI overrides from bypassing the configured origin.
+- Disable automatic redirects for D365 API and ADFS named clients, preserving TLS defaults. Raw API calls expose the original 3xx status; high-level calls and ADFS token acquisition fail instead of following redirects or forwarding POST bodies/client secrets.
+- Remove the unused `Microsoft.AspNetCore.WebUtilities 8.0.11` package reference affected by [GHSA-x33c-w48q-qrgc](https://github.com/dotnet/aspnetcore/security/advisories/GHSA-x33c-w48q-qrgc).
+- Compatibility: HTTP endpoints, cross-origin raw URLs, endpoint fragments/user information, and automatic redirect dependencies are no longer accepted. Use the final HTTPS endpoint and a separate named client for each API origin. Authentication selectors and Debug/Release authentication choices remain unchanged; there is no insecure opt-out or authentication fallback.
+
+### Added
+- Regression coverage for unsafe URI forms, pre-token/pre-send rejection, legitimate relative/absolute URL resolution, ADFS HTTPS acquisition, and redirect rejection without forwarding credentials or payloads.
+- Pull-request/main/codex-branch CI matrix for .NET 8 and .NET 10 on Windows and Linux, with non-integration tests, compiled example builds, and uploaded test results. Live D365 tests remain opt-in and separate.
+- Windows-compatible loopback TLS test keys with automatic disposal and leaf-only server certificates, avoiding certificate-store installation; CA trust remains local to each test handler.
+
+### Changed
+- Update the GitHub Release action to 3.0.4 (Node.js 24) so the tag-triggered publish workflow no longer relies on its retired Node.js 16 runtime.
+
 ## [2.2.0] - 2026-08-08
 ### Added
 - Strict `FromConfiguration()` support for `AuthType: ManagedIdentity` and optional `ManagedIdentityClientId`

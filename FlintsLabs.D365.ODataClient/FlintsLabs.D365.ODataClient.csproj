@@ -12,7 +12,7 @@
         
         <!-- NuGet Package Info -->
         <PackageId>FlintsLabs.D365.ODataClient</PackageId>
-        <Version>2.2.0</Version>
+        <Version>2.2.1</Version>
         <Authors>FlintsLabs</Authors>
         <Company>FlintsLabs</Company>
         <Product>D365 OData Client</Product>
@@ -24,7 +24,7 @@
         <PackageProjectUrl>https://github.com/FlintsLabs/FlintsLabs.D365.ODataClient</PackageProjectUrl>
         <RepositoryUrl>https://github.com/FlintsLabs/FlintsLabs.D365.ODataClient</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
-        <PackageReleaseNotes>2.2.0 adds strict configuration-driven Azure Managed Identity selection through AuthType and ManagedIdentityClientId. Managed Identity configuration no longer requires or retains ClientId, ClientSecret, or TenantId, while existing Azure AD/ADFS configuration and legacy detection remain supported. There is no authentication fallback. Authentication guide: https://github.com/FlintsLabs/FlintsLabs.D365.ODataClient/blob/main/docs/v2/authentication-and-parallelism.md</PackageReleaseNotes>
+        <PackageReleaseNotes>2.2.1 is a security update restoring TLS certificate validation, requiring HTTPS API and ADFS endpoints, restricting API requests to the configured origin, rejecting Host header overrides, and disabling automatic redirects. Removes the unused vulnerable Microsoft.AspNetCore.WebUtilities dependency and adds Windows/Linux regression CI for .NET 8 and .NET 10. Configure trusted certificates and final HTTPS URLs before upgrading; HTTP endpoints, cross-origin raw requests, and redirects are no longer supported. Existing authentication selectors remain unchanged, with no credential fallback. Security guide: https://github.com/FlintsLabs/FlintsLabs.D365.ODataClient/blob/v2.2.1/docs/v2/security-and-logging.md</PackageReleaseNotes>
         
         <!-- Package settings -->
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
@@ -44,7 +44,6 @@
         <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="9.0.0" />
         <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0" />
         <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.0" />
-        <PackageReference Include="Microsoft.AspNetCore.WebUtilities" Version="8.0.11" />
     </ItemGroup>
 
 </Project>

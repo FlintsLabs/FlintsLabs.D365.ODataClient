@@ -26,6 +26,7 @@ Version 2 is a breaking, fail-closed release. High-level reads and mutations no 
 
 | Package | Target frameworks | D365 endpoints |
 | --- | --- | --- |
+| 2.2.1 | .NET 8 and .NET 10 | Security update: validated HTTPS, same-origin API requests, no automatic redirects; existing authentication selectors retained |
 | 2.2.0 | .NET 8 and .NET 10 | F&O OData and Dataverse Web API with fluent or configuration-driven Azure AD/Managed Identity; existing ADFS client-credential deployments |
 | 2.1.0 | .NET 8 and .NET 10 | F&O OData and Dataverse Web API with Azure AD client credentials or Managed Identity; existing ADFS client-credential deployments |
 | 2.0.0 | .NET 8 and .NET 10 | F&O OData, Dataverse Web API, and existing ADFS client-credential deployments |
@@ -33,12 +34,23 @@ Version 2 is a breaking, fail-closed release. High-level reads and mutations no 
 ## Installation
 
 ```bash
-dotnet add package FlintsLabs.D365.ODataClient --version 2.2.0
+dotnet add package FlintsLabs.D365.ODataClient --version 2.2.1
 ```
 
 ## Security Notice
 
-Version 2.2.0 continues to preserve the package's existing TLS behavior for compatibility: the registered D365 and authentication HTTP handlers accept any server certificate. This disables certificate-chain and hostname validation and is unsafe on untrusted networks. Use the package only on a trusted network path while this compatibility behavior remains, and do not treat TLS peer identity as verified.
+Published version 2.2.0 accepts any server certificate on its registered D365 API and ADFS authentication HTTP clients. An active attacker on the network path could intercept tokens, client credentials, or application data. HTTPS alone does not verify peer identity with that version.
+
+**Version 2.2.1** removes this bypass and restores platform certificate-chain, hostname, and validity checks. Applications must upgrade their installed package; publishing this fix does not update existing deployments. Private-CA/on-premises deployments must configure trust on the application host and present a valid certificate for the requested hostname; do not bypass validation. Azure AD and Managed Identity token acquisition use MSAL's separate HTTP transport.
+
+The 2.2.1 security changes also:
+
+- Require an absolute HTTPS API endpoint and, when using ADFS, an absolute HTTPS `TokenEndpoint`. Invalid configuration fails before requests are sent. API base URLs must not contain query strings; endpoints must not contain user information or fragments.
+- Restrict every API request, including raw `SendAsync`, to the configured HTTPS origin (host and port). Relative, root-relative, and same-origin absolute URLs remain supported; a different endpoint requires a separately registered named D365 client. Unsafe request URLs and `AddHeader("Host", ...)` overrides throw `D365ProtocolException` before token acquisition or HTTP send (`NotSent` for mutations).
+- Disable automatic redirects on both named HTTP clients, including `307/308` redirects that could otherwise forward POST bodies. Raw calls return the original 3xx response; high-level calls throw `D365HttpException`; ADFS token acquisition fails. Configure the final HTTPS URL rather than relying on redirects.
+- Remove the unused `Microsoft.AspNetCore.WebUtilities` dependency affected by [GHSA-x33c-w48q-qrgc](https://github.com/dotnet/aspnetcore/security/advisories/GHSA-x33c-w48q-qrgc).
+
+These rules apply to both Debug and Release and do not change the Fluent authentication selectors or add a Client Secret fallback. With `OrganizationUrl` set, `Resource` remains the OAuth audience (which can be an ADFS URN); the HTTPS rule applies to the effective network endpoint.
 
 See [Security and logging](docs/v2/security-and-logging.md) before production deployment. Never commit client secrets or log `D365Response.RawBody` / `D365Exception.ResponseBody` without application-level redaction.
 
@@ -387,7 +399,11 @@ dotnet restore
 dotnet test FlintsLabs.D365.ODataClient.Tests/FlintsLabs.D365.ODataClient.Tests.csproj \
   -c Release \
   --filter "Category!=Integration"
+dotnet build samples/FlintsLabs.D365.ODataClient.V2.Examples/FlintsLabs.D365.ODataClient.V2.Examples.csproj -c Release
+dotnet list FlintsLabs.D365.ODataClient/FlintsLabs.D365.ODataClient.csproj package --vulnerable --include-transitive
 ```
+
+The test project targets both .NET 8 and .NET 10; omit `-f` to test both, or use `-f net8.0` / `-f net10.0` separately. [CI](.github/workflows/ci.yml) runs the non-integration suite on Windows and Linux for both frameworks on pull requests and pushes to `main`/`codex/**`, and builds the examples. TLS and redirect tests use local HTTPS servers and in-memory test CA trust; they do not modify the machine trust store or require Azure/D365 credentials. Configure the CI matrix jobs as required branch checks if they must block merging; adding the workflow alone does not enable branch protection.
 
 Live integration tests are opt-in through `D365_RUN_INTEGRATION_TESTS=true` and require local configuration. Normal build and package workflows do not contact D365.
 

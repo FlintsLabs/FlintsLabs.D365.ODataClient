@@ -203,6 +203,6 @@ The caller token reaches MSAL execution, ADFS HTTP calls, token-lock waiting, D3
 - Use an external secret provider.
 - Never log client secrets or access tokens.
 - Rotate any secret exposed in source, logs, chat, or configuration exports.
-- Remember that version 2.x accepts all TLS server certificates; authentication secrets are not protected from an active network attacker on an untrusted path.
+- Version 2.2.0 bypasses TLS certificate validation on the named D365 API and ADFS authentication clients. Version 2.2.1 restores validation, requires HTTPS endpoints, and disables automatic redirects; see [Security and logging](security-and-logging.md) before rollout. Azure AD and Managed Identity token requests use MSAL's separate HTTP transport.
 
 See [Security and logging](security-and-logging.md).

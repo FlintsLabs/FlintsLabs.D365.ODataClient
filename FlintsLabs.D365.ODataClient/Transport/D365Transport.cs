@@ -36,8 +36,8 @@ internal sealed class D365Transport(
         if (cancellationToken.IsCancellationRequested)
             throw CreateCancellationException(request, false, cancellationToken, null);
 
+        var requestUri = D365EndpointPolicy.ResolveRequestUri(options, request);
         var httpClient = httpClientFactory.CreateClient(options.HttpClientName);
-        var requestUri = ResolveRequestUri(httpClient, request.RelativeOrAbsoluteUrl);
         var sendStarted = false;
         var operationTimer = Stopwatch.StartNew();
 
@@ -211,7 +211,7 @@ internal sealed class D365Transport(
             D365LogSanitizer.Sanitize(requestUri)));
 
         using var timeout = CreateTimeoutTokenSource(cancellationToken);
-        using var message = request.CreateMessage(accessToken);
+        using var message = request.CreateMessage(accessToken, requestUri);
         using var response = await httpClient.SendAsync(
                 message,
                 HttpCompletionOption.ResponseHeadersRead,
@@ -361,15 +361,6 @@ internal sealed class D365Transport(
             TransportFailureOutcome(request, sendStarted),
             cancellationToken,
             innerException);
-    }
-
-    private static Uri ResolveRequestUri(HttpClient httpClient, string relativeOrAbsoluteUrl)
-    {
-        if (Uri.TryCreate(relativeOrAbsoluteUrl, UriKind.Absolute, out var absolute))
-            return absolute;
-        if (httpClient.BaseAddress is null)
-            throw new InvalidOperationException("D365 HttpClient BaseAddress is not configured.");
-        return new Uri(httpClient.BaseAddress, relativeOrAbsoluteUrl);
     }
 
     private static string TruncateUtf8(string value, int maxBytes)

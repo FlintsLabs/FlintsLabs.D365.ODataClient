@@ -2,6 +2,7 @@ using System.Text.Json;
 using FlintsLabs.D365.ODataClient.Exceptions;
 using FlintsLabs.D365.ODataClient.Extensions;
 using FlintsLabs.D365.ODataClient.Models;
+using FlintsLabs.D365.ODataClient.Transport;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Identity.Client;
@@ -216,11 +217,7 @@ internal sealed class D365AccessTokenProvider : ID365AccessTokenProvider
     {
         TryLog(() => _logger.LogDebug("Acquiring D365 access token from ADFS"));
 
-        if (string.IsNullOrWhiteSpace(_options.TokenEndpoint))
-        {
-            throw new InvalidOperationException(
-                "TokenEndpoint is required for ADFS authentication. Set D365:TokenEndpoint in configuration.");
-        }
+        var tokenEndpoint = D365EndpointPolicy.GetAdfsTokenUri(_options);
 
         var tokenPostData = new Dictionary<string, string>
         {
@@ -236,7 +233,7 @@ internal sealed class D365AccessTokenProvider : ID365AccessTokenProvider
                              "IHttpClientFactory is required for ADFS token acquisition.");
         using var content = new FormUrlEncodedContent(tokenPostData);
         using var response = await httpClient
-            .PostAsync(_options.TokenEndpoint, content, cancellationToken)
+            .PostAsync(tokenEndpoint, content, cancellationToken)
             .ConfigureAwait(false);
         var responseContent = await response.Content
             .ReadAsStringAsync(cancellationToken)
