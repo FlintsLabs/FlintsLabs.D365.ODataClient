@@ -3,35 +3,74 @@ name: Publish to NuGet
 on:
   push:
     tags:
-      - 'v*'  # Trigger on version tags like v1.0.0, v1.2.0
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing release tag to publish (for example, v2.2.1)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nuget-publish-${{ inputs.release_tag || github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
-  publish:
+  build:
+    if: github.event_name == 'push' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    permissions:
-      contents: write  # Required for creating GitHub releases
-    
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
     steps:
-    - name: Checkout code
+    - name: Checkout repository and tags
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        persist-credentials: false
+
+    - name: Resolve and check out release tag
+      id: release
+      shell: bash
+      env:
+        RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+      run: |
+        if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+          echo "Expected a version tag such as v2.2.1." >&2
+          exit 1
+        fi
+        commit=$(git rev-parse --verify "refs/tags/$RELEASE_TAG^{commit}")
+        if ! git merge-base --is-ancestor "$commit" refs/remotes/origin/main; then
+          echo "The release tag must point to a commit already on main." >&2
+          exit 1
+        fi
+        if [[ "$GITHUB_EVENT_NAME" == push && "$commit" != "$(git rev-parse "$GITHUB_SHA^{commit}")" ]]; then
+          echo "The tag no longer points to the commit that triggered this run." >&2
+          exit 1
+        fi
+        git switch --detach "$commit"
+        printf 'tag=%s\nversion=%s\n' "$RELEASE_TAG" "${RELEASE_TAG#v}" >> "$GITHUB_OUTPUT"
 
     - name: Setup .NET SDKs
-      uses: actions/setup-dotnet@v4
+      uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
       with:
         dotnet-version: |
           8.0.x
           10.0.x
 
-    - name: Extract version from tag
-      id: get_version
+    - name: Verify project version matches the release tag
+      shell: bash
+      env:
+        RELEASE_VERSION: ${{ steps.release.outputs.version }}
       run: |
-        VERSION=${GITHUB_REF#refs/tags/v}
-        if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]; then
-          echo "Invalid release tag: ${GITHUB_REF_NAME}" >&2
+        version=$(dotnet msbuild FlintsLabs.D365.ODataClient/FlintsLabs.D365.ODataClient.csproj -getProperty:Version)
+        if [[ "$version" != "$RELEASE_VERSION" ]]; then
+          echo "The tagged project's version does not match the release tag." >&2
           exit 1
         fi
-        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-        echo "Building version: $VERSION"
 
     - name: Restore dependencies
       run: |
@@ -39,30 +78,68 @@ jobs:
         dotnet restore samples/FlintsLabs.D365.ODataClient.V2.Examples/FlintsLabs.D365.ODataClient.V2.Examples.csproj
 
     - name: Test net8.0
-      run: dotnet test FlintsLabs.D365.ODataClient.Tests/FlintsLabs.D365.ODataClient.Tests.csproj -c Release -f net8.0 --no-restore --filter "Category!=Integration" -p:Version=${{ steps.get_version.outputs.VERSION }}
+      run: dotnet test FlintsLabs.D365.ODataClient.Tests/FlintsLabs.D365.ODataClient.Tests.csproj -c Release -f net8.0 --no-restore --filter "Category!=Integration"
 
     - name: Test net10.0
-      run: dotnet test FlintsLabs.D365.ODataClient.Tests/FlintsLabs.D365.ODataClient.Tests.csproj -c Release -f net10.0 --no-restore --filter "Category!=Integration" -p:Version=${{ steps.get_version.outputs.VERSION }}
+      run: dotnet test FlintsLabs.D365.ODataClient.Tests/FlintsLabs.D365.ODataClient.Tests.csproj -c Release -f net10.0 --no-restore --filter "Category!=Integration"
 
     - name: Build compiled examples
-      run: dotnet build samples/FlintsLabs.D365.ODataClient.V2.Examples/FlintsLabs.D365.ODataClient.V2.Examples.csproj -c Release --no-restore -p:Version=${{ steps.get_version.outputs.VERSION }}
+      run: dotnet build samples/FlintsLabs.D365.ODataClient.V2.Examples/FlintsLabs.D365.ODataClient.V2.Examples.csproj -c Release --no-restore
 
     - name: Build package targets
-      run: dotnet build FlintsLabs.D365.ODataClient/FlintsLabs.D365.ODataClient.csproj -c Release --no-restore -p:Version=${{ steps.get_version.outputs.VERSION }}
+      run: dotnet build FlintsLabs.D365.ODataClient/FlintsLabs.D365.ODataClient.csproj -c Release --no-restore
 
     - name: Pack
-      run: dotnet pack FlintsLabs.D365.ODataClient/FlintsLabs.D365.ODataClient.csproj -c Release --no-build -o ./nupkg -p:Version=${{ steps.get_version.outputs.VERSION }}
+      run: dotnet pack FlintsLabs.D365.ODataClient/FlintsLabs.D365.ODataClient.csproj -c Release --no-build -o ./nupkg
 
     - name: Inspect package contents
-      run: unzip -l ./nupkg/FlintsLabs.D365.ODataClient.${{ steps.get_version.outputs.VERSION }}.nupkg
+      env:
+        RELEASE_VERSION: ${{ steps.release.outputs.version }}
+      run: unzip -l "./nupkg/FlintsLabs.D365.ODataClient.$RELEASE_VERSION.nupkg"
+
+    - name: Upload package
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+      with:
+        name: nuget-package
+        path: ./nupkg/FlintsLabs.D365.ODataClient.${{ steps.release.outputs.version }}.nupkg
+        if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Create the GitHub Release for the existing tag.
+      id-token: write # Exchange a GitHub OIDC token for a short-lived NuGet push key.
+    steps:
+    - name: Download the built package
+      uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+      with:
+        name: nuget-package
+        path: ./nupkg
+
+    - name: Setup .NET SDK
+      uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+      with:
+        dotnet-version: '10.0.x'
+
+    - name: Sign in to NuGet with OIDC
+      id: nuget
+      uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1
+      with:
+        user: ${{ vars.NUGET_USER }}
 
     - name: Publish to NuGet
-      run: dotnet nuget push ./nupkg/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+      env:
+        RELEASE_VERSION: ${{ needs.build.outputs.version }}
+        NUGET_PUSH_KEY: ${{ steps.nuget.outputs.NUGET_API_KEY }}
+      run: |
+        dotnet nuget push "./nupkg/FlintsLabs.D365.ODataClient.$RELEASE_VERSION.nupkg" \
+          --api-key "$NUGET_PUSH_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
 
     - name: Create GitHub Release
-      uses: softprops/action-gh-release@v3.0.4
+      uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
       with:
-        files: ./nupkg/*.nupkg
+        tag_name: ${{ needs.build.outputs.tag }}
+        files: ./nupkg/FlintsLabs.D365.ODataClient.${{ needs.build.outputs.version }}.nupkg
+        fail_on_unmatched_files: true
         generate_release_notes: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

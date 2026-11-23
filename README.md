@@ -407,6 +407,12 @@ The test project targets both .NET 8 and .NET 10; omit `-f` to test both, or use
 
 Live integration tests are opt-in through `D365_RUN_INTEGRATION_TESTS=true` and require local configuration. Normal build and package workflows do not contact D365.
 
+## Publishing (Maintainers)
+
+The [publish workflow](.github/workflows/publish-nuget.yml) uses [NuGet Trusted Publishing](https://learn.microsoft.com/en-us/nuget/nuget-org/trusted-publishing) with GitHub OIDC. Configure a NuGet policy for `publish-nuget.yml`, scoped to this package, and set the `NUGET_USER` repository variable to the NuGet profile name that created the policy. No stored NuGet API key is required.
+
+After Windows and Linux CI passes for the release commit on `main`, push its version tag. To publish an existing tag using the current workflow (for example, after a publishing failure), dispatch the workflow from `main` with `release_tag` set to the existing tag. The workflow checks out that tag and verifies the project version before building. The tag is not moved.
+
 ## License
 
 MIT. See [LICENSE](https://github.com/FlintsLabs/FlintsLabs.D365.ODataClient/blob/main/LICENSE) in the repository.

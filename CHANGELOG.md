@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Publish via NuGet Trusted Publishing (GitHub OIDC) instead of a stored API key. Allow manual publishing of an existing release tag from `main` without moving the tag.
+
 ## [2.2.1] - 2026-11-15
 
 ### Security
